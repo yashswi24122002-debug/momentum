@@ -8,6 +8,15 @@ export type DayProductivityPoint = { date: string; completed: number };
 export type HabitStreak = { habitId: string; habitName: string; current: number; longest: number };
 export type HabitCompletionRate = { habitId: string; habitName: string; pct: number };
 export type WeekdayRate = { weekday: string; pct: number };
+export type CategoryRate = { category: string; pct: number; habitCount: number };
+export type HeatmapCell = { date: string; weekIndex: number; weekday: number; pct: number };
+export type OverallStats = {
+  totalHabits: number;
+  todayPct: number;
+  weekPct: number;
+  longestActiveStreak: number;
+  totalCheckins: number;
+};
 
 function logsByHabit(logs: HabitLog[]): Map<string, HabitLog[]> {
   const map = new Map<string, HabitLog[]>();
@@ -154,4 +163,84 @@ export function weekdayCompletionRates(
     weekday: label,
     pct: weekdayOccurrences[i] === 0 ? 0 : Math.round((completedByWeekday[i] / weekdayOccurrences[i]) * 100),
   }));
+}
+
+/** Completion % grouped by habit category over the trailing `days` days. */
+export function completionByCategory(
+  habits: Habit[],
+  logs: HabitLog[],
+  today: string,
+  days = 30
+): CategoryRate[] {
+  const since = addDays(today, -(days - 1));
+  const byHabit = logsByHabit(logs);
+  const groups = new Map<string, Habit[]>();
+
+  for (const habit of habits) {
+    const key = habit.category?.trim() || "Uncategorized";
+    const list = groups.get(key) ?? [];
+    list.push(habit);
+    groups.set(key, list);
+  }
+
+  return Array.from(groups.entries())
+    .map(([category, groupHabits]) => {
+      const completed = groupHabits.reduce((sum, habit) => {
+        return sum + (byHabit.get(habit.id) ?? []).filter((l) => l.completed && l.date >= since).length;
+      }, 0);
+      const possible = groupHabits.length * days;
+      return {
+        category,
+        pct: possible === 0 ? 0 : Math.round((completed / possible) * 100),
+        habitCount: groupHabits.length,
+      };
+    })
+    .sort((a, b) => b.pct - a.pct);
+}
+
+/**
+ * GitHub-contributions-style grid: one cell per day over the trailing
+ * `weeks` weeks, value = fraction of habits completed that day (0..1).
+ * Weeks run Monday-Sunday to match startOfWeekMonday elsewhere.
+ */
+export function contributionHeatmap(habits: Habit[], logs: HabitLog[], today: string, weeks = 16): HeatmapCell[] {
+  const completedByDate = new Map<string, number>();
+  for (const log of logs) {
+    if (log.completed) completedByDate.set(log.date, (completedByDate.get(log.date) ?? 0) + 1);
+  }
+
+  const totalDays = weeks * 7;
+  const start = addDays(today, -(totalDays - 1));
+  const cells: HeatmapCell[] = [];
+
+  for (let i = 0; i < totalDays; i++) {
+    const date = addDays(start, i);
+    const jsWeekday = parseLocalISODate(date).getDay(); // 0 = Sun
+    const mondayFirstWeekday = jsWeekday === 0 ? 6 : jsWeekday - 1;
+    const completed = completedByDate.get(date) ?? 0;
+    cells.push({
+      date,
+      weekIndex: Math.floor(i / 7),
+      weekday: mondayFirstWeekday,
+      pct: habits.length === 0 ? 0 : completed / habits.length,
+    });
+  }
+
+  return cells;
+}
+
+/** Top-line stats for the dashboard header row. */
+export function overallStats(habits: Habit[], logs: HabitLog[], today: string): OverallStats {
+  const streaks = habitStreaks(habits, logs, today);
+  const todayCompleted = logs.filter((l) => l.completed && l.date === today).length;
+  const weekStart = addDays(today, -6);
+  const weekCompleted = logs.filter((l) => l.completed && l.date >= weekStart && l.date <= today).length;
+
+  return {
+    totalHabits: habits.length,
+    todayPct: habits.length === 0 ? 0 : Math.round((todayCompleted / habits.length) * 100),
+    weekPct: habits.length === 0 ? 0 : Math.round((weekCompleted / (habits.length * 7)) * 100),
+    longestActiveStreak: streaks.reduce((max, s) => Math.max(max, s.current), 0),
+    totalCheckins: logs.filter((l) => l.completed).length,
+  };
 }
