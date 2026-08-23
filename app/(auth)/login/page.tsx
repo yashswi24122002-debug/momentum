@@ -35,7 +35,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (error) {
-      setError("Incorrect email or password.");
+      setError(`${error.message} (status: ${error.status ?? "unknown"})`);
       return;
     }
 
