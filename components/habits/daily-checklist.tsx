@@ -94,7 +94,7 @@ export function DailyChecklist() {
         <p className="text-sm text-text-secondary">
           {completedIds.size} of {habits.length} done today
         </p>
-        <Button variant="ghost" size="sm" render={<Link href="/habits/manage" />}>
+        <Button variant="ghost" size="sm" render={<Link href="/habits/manage" />} nativeButton={false}>
           <Settings2 className="size-4" />
           Manage
         </Button>
