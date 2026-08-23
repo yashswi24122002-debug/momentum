@@ -21,7 +21,7 @@ export default async function DashboardLayout({
     <div className="min-h-full">
       <SidebarNav />
       <main className="min-h-full pb-20 md:ml-56 md:pb-0">
-        <div className="mx-auto flex min-h-full max-w-3xl flex-col px-4 py-6 md:px-8 md:py-8">
+        <div className="flex min-h-full w-full flex-col px-4 py-6 md:px-8 md:py-8">
           {children}
         </div>
       </main>
