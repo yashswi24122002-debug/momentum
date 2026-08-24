@@ -1,23 +1,16 @@
-"use client";
-
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { LIFECYCLE_ORDER, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "@/lib/ideas/ui";
-import type { IdeaReport, IdeaLifecycleStatus } from "@/lib/types/ideas";
+import type { IdeaReport } from "@/lib/types/ideas";
 
 export type ReportWithIdea = IdeaReport & {
   ideas: { title: string; one_liner: string; category: string; effort_estimate: string } | null;
 };
 
-export function PipelineBoard({
-  reports,
-  onStatusChange,
-}: {
-  reports: ReportWithIdea[];
-  onStatusChange: (reportId: string, status: IdeaLifecycleStatus) => void;
-}) {
+// Stage is changed from the report detail page only (/ideas/[id]) — this
+// board is a read-only overview, not another place to edit from.
+export function PipelineBoard({ reports }: { reports: ReportWithIdea[] }) {
   if (reports.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-text-secondary">
@@ -38,26 +31,14 @@ export function PipelineBoard({
             </div>
             <div className="space-y-2">
               {columnReports.map((report) => (
-                <Card key={report.id} className="gap-2 border-border bg-surface p-3">
-                  <Link href={`/ideas/${report.idea_id}`} className="text-sm font-medium text-text-primary hover:text-primary">
-                    {report.ideas?.title ?? "Untitled idea"}
-                  </Link>
-                  <Select
-                    value={report.lifecycle_status}
-                    onValueChange={(v) => onStatusChange(report.id, v as IdeaLifecycleStatus)}
-                  >
-                    <SelectTrigger size="sm" className="w-full text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LIFECYCLE_ORDER.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {LIFECYCLE_LABELS[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Card>
+                <Link key={report.id} href={`/ideas/${report.idea_id}`}>
+                  <Card className="gap-1 border-border bg-surface p-3 transition-colors hover:bg-surface-hover">
+                    <p className="text-sm font-medium text-text-primary">{report.ideas?.title ?? "Untitled idea"}</p>
+                    {report.ideas?.category && (
+                      <p className="text-xs text-text-muted">{report.ideas.category}</p>
+                    )}
+                  </Card>
+                </Link>
               ))}
             </div>
           </div>

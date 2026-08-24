@@ -13,7 +13,7 @@ import { PipelineBoard, type ReportWithIdea } from "@/components/ideas/pipeline-
 import { WeeklyDigestCard } from "@/components/ideas/weekly-digest";
 import { computeWeeklyDigest } from "@/lib/ideas/digest";
 import { todayLocalISODate } from "@/lib/date";
-import type { Idea, IdeaLifecycleStatus, RejectionReason } from "@/lib/types/ideas";
+import type { Idea, RejectionReason } from "@/lib/types/ideas";
 
 export function IdeasPage() {
   const [allIdeas, setAllIdeas] = useState<Idea[] | null>(null);
@@ -95,20 +95,6 @@ export function IdeasPage() {
     }
   }
 
-  async function handleStatusChange(reportId: string, status: IdeaLifecycleStatus) {
-    const previous = reports;
-    setReports((prev) => prev?.map((r) => (r.id === reportId ? { ...r, lifecycle_status: status } : r)) ?? null);
-    const res = await fetch(`/api/idea-reports/${reportId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lifecycle_status: status }),
-    });
-    if (!res.ok) {
-      setReports(previous);
-      toast.error("Couldn't update that idea's stage — try again.");
-    }
-  }
-
   if (allIdeas === null || reports === null) {
     return (
       <div className="space-y-4">
@@ -163,7 +149,7 @@ export function IdeasPage() {
 
       <div className="space-y-3">
         <h2 className="text-sm font-medium text-text-secondary">Pipeline</h2>
-        <PipelineBoard reports={reports} onStatusChange={handleStatusChange} />
+        <PipelineBoard reports={reports} />
       </div>
 
       <RejectDialog

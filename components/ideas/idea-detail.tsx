@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LIFECYCLE_ORDER, LIFECYCLE_LABELS, parseSignalSource } from "@/lib/ideas/ui";
+import { exportIdeaReportPdf } from "@/lib/ideas/export-pdf";
 import type { Idea, IdeaReport, IdeaLifecycleStatus } from "@/lib/types/ideas";
 
 type IdeaWithReports = Idea & { idea_reports: IdeaReport[] };
@@ -128,9 +129,18 @@ export function IdeaDetail({ ideaId }: { ideaId: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <span className="ml-auto text-sm text-text-secondary">
+            <span className="text-sm text-text-secondary">
               Impact/effort score: <span className="font-semibold text-primary">{report.effort_impact_score}/10</span>
             </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              onClick={() => exportIdeaReportPdf(idea, report)}
+            >
+              <Download className="size-4" />
+              Download PDF
+            </Button>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
