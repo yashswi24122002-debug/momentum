@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Lightbulb, Sparkles, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Lightbulb, Sparkles, Loader2, History } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -80,6 +81,20 @@ export function IdeasPage() {
     setAllIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i)) ?? null);
   }
 
+  async function handleToggleSave(idea: Idea) {
+    const nextSaved = !idea.saved;
+    setAllIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, saved: nextSaved } : i)) ?? null);
+    const res = await fetch(`/api/ideas/${idea.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ saved: nextSaved }),
+    });
+    if (!res.ok) {
+      setAllIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, saved: idea.saved } : i)) ?? null);
+      toast.error("Couldn't save that — try again.");
+    }
+  }
+
   async function handleStatusChange(reportId: string, status: IdeaLifecycleStatus) {
     const previous = reports;
     setReports((prev) => prev?.map((r) => (r.id === reportId ? { ...r, lifecycle_status: status } : r)) ?? null);
@@ -110,10 +125,16 @@ export function IdeasPage() {
     <div className="flex flex-1 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-text-primary">Ideas</h1>
-        <Button onClick={handleGenerate} disabled={generating}>
-          {generating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-          {generating ? "Generating…" : "Generate Today's Ideas"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" render={<Link href="/ideas/history" />} nativeButton={false}>
+            <History className="size-4" />
+            History
+          </Button>
+          <Button onClick={handleGenerate} disabled={generating}>
+            {generating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+            {generating ? "Generating…" : "Generate Today's Ideas"}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -122,7 +143,7 @@ export function IdeasPage() {
             <EmptyState
               icon={Lightbulb}
               title="No ideas generated yet today"
-              description="Generate today's ideas to get 3 project concepts sourced from trending tech signals."
+              description="Generate today's ideas to get 5 project concepts sourced from trending tech signals."
             />
           ) : (
             pendingToday.map((idea) => (
@@ -132,6 +153,7 @@ export function IdeasPage() {
                 approving={approvingId === idea.id}
                 onApprove={() => handleApprove(idea)}
                 onReject={() => setRejectTarget(idea)}
+                onToggleSave={() => handleToggleSave(idea)}
               />
             ))
           )}

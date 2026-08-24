@@ -1,22 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X, Loader2, Info } from "lucide-react";
+import { Check, X, Loader2, Info, Star } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { parseSignalSource } from "@/lib/ideas/ui";
+import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
 import type { Idea } from "@/lib/types/ideas";
 
 export function IdeaCard({
   idea,
   onApprove,
   onReject,
+  onToggleSave,
   approving,
+  statusBadge,
 }: {
   idea: Idea;
-  onApprove: () => void;
-  onReject: () => void;
-  approving: boolean;
+  onApprove?: () => void;
+  onReject?: () => void;
+  onToggleSave: () => void;
+  approving?: boolean;
+  statusBadge?: { label: string; tone: StatusTone };
 }) {
   const [showExplainer, setShowExplainer] = useState(false);
 
@@ -27,28 +33,45 @@ export function IdeaCard({
   return (
     <Card className="gap-2 border-border bg-surface p-4">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-text-primary">{idea.title}</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold text-text-primary">{idea.title}</h3>
+          {statusBadge && <StatusBadge label={statusBadge.label} tone={statusBadge.tone} />}
+        </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button
             variant="ghost"
             size="icon-sm"
-            className="text-danger hover:bg-danger/10"
-            onClick={onReject}
-            disabled={approving}
-            aria-label="Reject"
+            className={cn(idea.saved ? "text-warning" : "text-text-muted")}
+            onClick={onToggleSave}
+            aria-label={idea.saved ? "Unsave" : "Save for later"}
+            title={idea.saved ? "Saved for later" : "Save for later"}
           >
-            <X className="size-4" />
+            <Star className={cn("size-4", idea.saved && "fill-current")} />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="text-primary hover:bg-accent-muted-bg"
-            onClick={onApprove}
-            disabled={approving}
-            aria-label="Approve"
-          >
-            {approving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-          </Button>
+          {onReject && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-danger hover:bg-danger/10"
+              onClick={onReject}
+              disabled={approving}
+              aria-label="Reject"
+            >
+              <X className="size-4" />
+            </Button>
+          )}
+          {onApprove && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-primary hover:bg-accent-muted-bg"
+              onClick={onApprove}
+              disabled={approving}
+              aria-label="Approve"
+            >
+              {approving ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+            </Button>
+          )}
         </div>
       </div>
       <p className="text-sm text-text-secondary">{idea.one_liner}</p>

@@ -15,6 +15,8 @@ export type Idea = {
   source_signals: string[] | null;
   /** Plain-language explanation of any jargon/tech/trend the idea assumes familiarity with. */
   explainer: string | null;
+  /** Lightweight bookmark, independent of status — "interesting, revisit later." */
+  saved: boolean;
   created_at: string;
 };
 
