@@ -6,7 +6,8 @@ import type { HeatmapCell } from "@/lib/habits/stats";
 const WEEKDAY_ROW_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
 const MONTH_FORMATTER = new Intl.DateTimeFormat("en-US", { month: "short" });
 
-function intensityClass(pct: number): string {
+function intensityClass(pct: number, scheduledCount: number): string {
+  if (scheduledCount === 0) return "bg-transparent ring-1 ring-inset ring-border/60";
   if (pct <= 0) return "bg-surface-hover";
   if (pct < 0.34) return "bg-primary/25";
   if (pct < 0.67) return "bg-primary/55";
@@ -68,8 +69,14 @@ export function ContributionHeatmap({ cells }: { cells: HeatmapCell[] }) {
               {week.map((cell, weekday) => (
                 <div
                   key={weekday}
-                  title={cell ? `${cell.date}: ${Math.round(cell.pct * 100)}%` : undefined}
-                  className={`size-3 rounded-sm ${cell ? intensityClass(cell.pct) : "bg-transparent"}`}
+                  title={
+                    cell
+                      ? cell.scheduledCount === 0
+                        ? `${cell.date}: nothing scheduled`
+                        : `${cell.date}: ${Math.round(cell.pct * 100)}%`
+                      : undefined
+                  }
+                  className={`size-3 rounded-sm ${cell ? intensityClass(cell.pct, cell.scheduledCount) : "bg-transparent"}`}
                 />
               ))}
             </div>

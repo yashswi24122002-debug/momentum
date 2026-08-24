@@ -6,6 +6,9 @@ export type Habit = {
   archived_at: string | null;
   sort_order: number;
   created_at: string;
+  /** Weekdays this habit applies to, 0=Sun..6=Sat (matches Date#getDay()). All 7 = daily. */
+  frequency_days: number[];
+  color: string | null;
 };
 
 export type HabitLog = {
@@ -14,6 +17,9 @@ export type HabitLog = {
   date: string;
   completed: boolean;
   logged_at: string;
+  /** Marked as an excused day (sick, travel, etc.) — doesn't break a streak. */
+  excused: boolean;
+  note: string | null;
 };
 
 export type WeeklyTodoTask = {

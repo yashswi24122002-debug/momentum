@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Check, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, X, Snowflake } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { daysInMonth, toLocalISODate, todayLocalISODate, addDays } from "@/lib/date";
+import { isScheduledOn } from "@/lib/habits/schedule";
 import type { Habit, HabitLog } from "@/lib/types/habits";
 
 const MONTH_FORMATTER = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
@@ -16,13 +17,15 @@ const MONTH_FORMATTER = new Intl.DateTimeFormat("en-US", { month: "long", year: 
 // way to log today.
 const EDITABLE_WINDOW_DAYS = 7;
 
+type CellState = { completed: boolean; excused: boolean; note: string | null };
+
 export function HabitGrid() {
   const [cursor, setCursor] = useState(() => {
     const today = new Date();
     return { year: today.getFullYear(), month: today.getMonth() };
   });
   const [habits, setHabits] = useState<Habit[] | null>(null);
-  const [logsByKey, setLogsByKey] = useState<Map<string, boolean>>(new Map());
+  const [logsByKey, setLogsByKey] = useState<Map<string, CellState>>(new Map());
 
   const today = todayLocalISODate();
   const earliestEditable = addDays(today, -(EDITABLE_WINDOW_DAYS - 1));
@@ -48,9 +51,13 @@ export function HabitGrid() {
       }
 
       const logsJson = await logsRes.json();
-      const map = new Map<string, boolean>();
+      const map = new Map<string, CellState>();
       (logsJson.logs as HabitLog[] | undefined)?.forEach((log) => {
-        map.set(`${log.habit_id}:${log.date}`, log.completed);
+        map.set(`${log.habit_id}:${log.date}`, {
+          completed: log.completed,
+          excused: log.excused,
+          note: log.note,
+        });
       });
       setLogsByKey(map);
     }
@@ -58,18 +65,19 @@ export function HabitGrid() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor.year, cursor.month]);
 
-  async function toggleCell(habitId: string, date: string, current: boolean) {
+  async function toggleCell(habitId: string, date: string, current: CellState | undefined) {
     const key = `${habitId}:${date}`;
-    setLogsByKey((prev) => new Map(prev).set(key, !current));
+    const wasCompleted = current?.completed ?? false;
+    setLogsByKey((prev) => new Map(prev).set(key, { completed: !wasCompleted, excused: false, note: current?.note ?? null }));
 
     const res = await fetch(`/api/habits/${habitId}/log`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, completed: !current }),
+      body: JSON.stringify({ date, completed: !wasCompleted }),
     });
 
     if (!res.ok) {
-      setLogsByKey((prev) => new Map(prev).set(key, current));
+      setLogsByKey((prev) => new Map(prev).set(key, current ?? { completed: false, excused: false, note: null }));
       toast.error("Couldn't save that — try again.");
     }
   }
@@ -135,22 +143,41 @@ export function HabitGrid() {
               {habits.map((habit) => (
                 <tr key={habit.id}>
                   <td className="sticky left-0 z-10 border-b border-border bg-surface p-2 text-text-primary">
-                    {habit.name}
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="size-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: habit.color ?? "var(--brand)" }}
+                      />
+                      {habit.name}
+                    </span>
                   </td>
                   {days.map((day) => {
                     const date = toLocalISODate(new Date(cursor.year, cursor.month, day));
-                    const completed = logsByKey.get(`${habit.id}:${date}`) ?? false;
+                    const cell = logsByKey.get(`${habit.id}:${date}`);
+                    const completed = cell?.completed ?? false;
+                    const excused = cell?.excused ?? false;
+                    const scheduled = isScheduledOn(habit, date);
                     const editable = date >= earliestEditable && date <= today;
                     const future = date > today;
 
+                    if (!scheduled) {
+                      return (
+                        <td key={day} className="border-b border-border p-1 text-center text-text-muted/40" title="Not scheduled">
+                          ·
+                        </td>
+                      );
+                    }
+
                     return (
-                      <td key={day} className="border-b border-border p-1 text-center">
-                        {future ? (
+                      <td key={day} className="border-b border-border p-1 text-center" title={cell?.note ?? undefined}>
+                        {excused ? (
+                          <Snowflake className="mx-auto size-3.5 text-info" />
+                        ) : future ? (
                           <span className="text-text-muted">·</span>
                         ) : editable ? (
                           <button
                             type="button"
-                            onClick={() => toggleCell(habit.id, date, completed)}
+                            onClick={() => toggleCell(habit.id, date, cell)}
                             className={cn(
                               "flex size-5 items-center justify-center rounded",
                               completed ? "bg-accent-muted-bg text-primary" : "bg-transparent text-text-muted hover:bg-surface-hover"

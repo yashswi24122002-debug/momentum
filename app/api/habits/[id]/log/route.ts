@@ -10,21 +10,36 @@ export async function POST(
 
   const { id } = await params;
   const body = await request.json();
-  const { date, completed } = body as { date?: string; completed?: boolean };
+  const { date, completed, excused, note } = body as {
+    date?: string;
+    completed?: boolean;
+    excused?: boolean;
+    note?: string | null;
+  };
 
-  if (!date || typeof date !== "string" || typeof completed !== "boolean") {
+  if (!date || typeof date !== "string") {
+    return NextResponse.json({ error: "date (YYYY-MM-DD) is required" }, { status: 400 });
+  }
+
+  const patch: Record<string, unknown> = { habit_id: id, date, logged_at: new Date().toISOString() };
+  if (typeof completed === "boolean") patch.completed = completed;
+  if (typeof excused === "boolean") patch.excused = excused;
+  if (typeof note === "string" || note === null) patch.note = note;
+
+  if (!("completed" in patch) && !("excused" in patch) && !("note" in patch)) {
     return NextResponse.json(
-      { error: "date (YYYY-MM-DD) and completed (boolean) are required" },
+      { error: "at least one of completed, excused, note is required" },
       { status: 400 }
     );
   }
 
+  // completed and excused are mutually exclusive states for a given day.
+  if (patch.completed === true) patch.excused = false;
+  if (patch.excused === true) patch.completed = false;
+
   const { data, error } = await supabase
     .from("habit_logs")
-    .upsert(
-      { habit_id: id, date, completed, logged_at: new Date().toISOString() },
-      { onConflict: "habit_id,date" }
-    )
+    .upsert(patch, { onConflict: "habit_id,date" })
     .select()
     .single();
 

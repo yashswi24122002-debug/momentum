@@ -14,16 +14,19 @@ function NavLink({
   label,
   active,
   indent,
+  onNavigate,
 }: {
   href: string;
   icon: NavItem["icon"];
   label: string;
   active: boolean;
   indent?: boolean;
+  onNavigate?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={cn(
         "flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors",
         indent ? "ml-3.5 border-l border-border pl-4" : "px-3",
@@ -38,7 +41,15 @@ function NavLink({
   );
 }
 
-function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavGroup({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  onNavigate?: () => void;
+}) {
   const sectionActive = pathname.startsWith(item.href);
   const [open, setOpen] = useState(sectionActive);
   const exactActive = pathname === item.href;
@@ -53,7 +64,11 @@ function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
             : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
         )}
       >
-        <Link href={item.href} className="flex flex-1 items-center gap-3 px-3 py-2">
+        <Link
+          href={item.href}
+          onClick={onNavigate}
+          className="flex flex-1 items-center gap-3 px-3 py-2"
+        >
           <item.icon className="size-4 shrink-0" strokeWidth={exactActive ? 2.5 : 2} />
           {item.label}
         </Link>
@@ -68,7 +83,12 @@ function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
           />
         </button>
       </div>
-      <div className={cn("grid transition-all duration-200 ease-out", open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
+      <div
+        className={cn(
+          "grid transition-all duration-200 ease-out",
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        )}
+      >
         <div className="space-y-0.5 overflow-hidden pt-0.5">
           {item.children?.map((child) => (
             <NavLink
@@ -78,6 +98,7 @@ function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
               label={child.label}
               active={pathname === child.href}
               indent
+              onNavigate={onNavigate}
             />
           ))}
         </div>
@@ -86,20 +107,19 @@ function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-export function SidebarNav() {
+/** Shared nav tree, used inside the desktop sidebar and the mobile drawer. */
+export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 hidden w-56 flex-col border-r border-border bg-background md:flex">
+    <div className="flex h-full flex-col">
       <div className="flex h-14 items-center px-5">
-        <span className="text-sm font-semibold tracking-tight text-text-primary">
-          Momentum
-        </span>
+        <span className="text-sm font-semibold tracking-tight text-text-primary">Momentum</span>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-3">
         {NAV_ITEMS.map((item) =>
           item.children ? (
-            <NavGroup key={item.href} item={item} pathname={pathname} />
+            <NavGroup key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
           ) : (
             <NavLink
               key={item.href}
@@ -107,6 +127,7 @@ export function SidebarNav() {
               icon={item.icon}
               label={item.label}
               active={pathname.startsWith(item.href)}
+              onNavigate={onNavigate}
             />
           )
         )}
@@ -114,6 +135,14 @@ export function SidebarNav() {
       <div className="border-t border-border p-3">
         <LogoutButton />
       </div>
+    </div>
+  );
+}
+
+export function SidebarNav() {
+  return (
+    <aside className="fixed inset-y-0 left-0 z-50 hidden w-56 flex-col border-r border-border bg-background md:flex">
+      <NavContent />
     </aside>
   );
 }

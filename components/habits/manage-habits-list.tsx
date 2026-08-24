@@ -22,16 +22,21 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FrequencyPicker } from "@/components/habits/frequency-picker";
+import { ColorPicker } from "@/components/habits/color-picker";
+import { ALL_WEEKDAYS, scheduleLabel } from "@/lib/habits/schedule";
 import type { Habit } from "@/lib/types/habits";
 
 function SortableHabitRow({
   habit,
   onRename,
   onArchive,
+  onUpdate,
 }: {
   habit: Habit;
   onRename: (id: string, name: string) => void;
   onArchive: (id: string) => void;
+  onUpdate: (id: string, updates: Partial<Pick<Habit, "frequency_days" | "color">>) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: habit.id });
@@ -47,32 +52,51 @@ function SortableHabitRow({
     <Card
       ref={setNodeRef}
       style={style}
-      className="flex flex-row items-center gap-2 border-border bg-surface p-3"
+      className="flex flex-col gap-3 border-border bg-surface p-3"
     >
-      <button
-        type="button"
-        className="cursor-grab touch-none text-text-muted active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" />
-      </button>
-      <Input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={() => {
-          if (name.trim() && name !== habit.name) onRename(habit.id, name.trim());
-        }}
-        className="flex-1"
-      />
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-text-muted hover:text-danger"
-        onClick={() => onArchive(habit.id)}
-      >
-        <Archive className="size-4" />
-      </Button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="cursor-grab touch-none text-text-muted active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4" />
+        </button>
+        <span
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: habit.color ?? "var(--brand)" }}
+        />
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            if (name.trim() && name !== habit.name) onRename(habit.id, name.trim());
+          }}
+          className="flex-1"
+        />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-text-muted hover:text-danger"
+          onClick={() => onArchive(habit.id)}
+        >
+          <Archive className="size-4" />
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 pl-6">
+        <div className="flex items-center gap-2">
+          <FrequencyPicker
+            value={habit.frequency_days}
+            onChange={(frequency_days) => onUpdate(habit.id, { frequency_days })}
+          />
+          <span className="text-[11px] text-text-muted">{scheduleLabel(habit.frequency_days)}</span>
+        </div>
+      </div>
+      <div className="pl-6">
+        <ColorPicker value={habit.color} onChange={(color) => onUpdate(habit.id, { color })} />
+      </div>
     </Card>
   );
 }
@@ -80,6 +104,8 @@ function SortableHabitRow({
 export function ManageHabitsList() {
   const [habits, setHabits] = useState<Habit[] | null>(null);
   const [newName, setNewName] = useState("");
+  const [newFrequency, setNewFrequency] = useState<number[]>(ALL_WEEKDAYS);
+  const [newColor, setNewColor] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useEffect(() => {
@@ -95,7 +121,7 @@ export function ManageHabitsList() {
     const res = await fetch("/api/habits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() }),
+      body: JSON.stringify({ name: newName.trim(), frequency_days: newFrequency, color: newColor }),
     });
 
     if (!res.ok) {
@@ -106,6 +132,8 @@ export function ManageHabitsList() {
     const { habit } = await res.json();
     setHabits((prev) => [...(prev ?? []), habit]);
     setNewName("");
+    setNewFrequency(ALL_WEEKDAYS);
+    setNewColor(null);
   }
 
   async function renameHabit(id: string, name: string) {
@@ -116,6 +144,20 @@ export function ManageHabitsList() {
       body: JSON.stringify({ name }),
     });
     if (!res.ok) toast.error("Couldn't rename that habit — try again.");
+  }
+
+  async function updateHabit(id: string, updates: Partial<Pick<Habit, "frequency_days" | "color">>) {
+    const previous = habits;
+    setHabits((prev) => prev?.map((h) => (h.id === id ? { ...h, ...updates } : h)) ?? null);
+    const res = await fetch(`/api/habits/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      setHabits(previous);
+      toast.error("Couldn't update that habit — try again.");
+    }
   }
 
   async function archiveHabit(id: string) {
@@ -162,15 +204,22 @@ export function ManageHabitsList() {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={addHabit} className="flex gap-2">
-        <Input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="New habit name"
-        />
-        <Button type="submit" size="icon">
-          <Plus className="size-4" />
-        </Button>
+      <form onSubmit={addHabit} className="space-y-2 rounded-xl border border-border bg-surface p-3">
+        <div className="flex gap-2">
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New habit name"
+          />
+          <Button type="submit" size="icon">
+            <Plus className="size-4" />
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <FrequencyPicker value={newFrequency} onChange={setNewFrequency} />
+          <span className="text-[11px] text-text-muted">{scheduleLabel(newFrequency)}</span>
+        </div>
+        <ColorPicker value={newColor} onChange={setNewColor} />
       </form>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -182,6 +231,7 @@ export function ManageHabitsList() {
                 habit={habit}
                 onRename={renameHabit}
                 onArchive={archiveHabit}
+                onUpdate={updateHabit}
               />
             ))}
           </div>

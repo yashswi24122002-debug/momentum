@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
+import { isValidFrequencyDays } from "@/lib/habits/schedule";
 
 export async function PATCH(
   request: NextRequest,
@@ -16,6 +17,16 @@ export async function PATCH(
   if (typeof body.category === "string" || body.category === null) updates.category = body.category;
   if (typeof body.sort_order === "number") updates.sort_order = body.sort_order;
   if (typeof body.active === "boolean") updates.active = body.active;
+  if (typeof body.color === "string" || body.color === null) updates.color = body.color;
+  if (body.frequency_days !== undefined) {
+    if (!isValidFrequencyDays(body.frequency_days)) {
+      return NextResponse.json(
+        { error: "frequency_days must be a non-empty array of integers 0-6" },
+        { status: 400 }
+      );
+    }
+    updates.frequency_days = body.frequency_days;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
