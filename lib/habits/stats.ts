@@ -1,4 +1,4 @@
-import { addDays, parseLocalISODate } from "@/lib/date";
+import { addDays, parseLocalISODate, toLocalISODate } from "@/lib/date";
 import { isScheduledOn, WEEKDAY_LABELS } from "@/lib/habits/schedule";
 import type { Habit, HabitLog } from "@/lib/types/habits";
 
@@ -18,7 +18,13 @@ export type OverallStats = {
 };
 
 /** Per-habit index of completed/excused dates, precomputed once per stats call. */
-type HabitIndex = { habit: Habit; completedDates: Set<string>; excusedDates: Set<string> };
+type HabitIndex = {
+  habit: Habit;
+  completedDates: Set<string>;
+  excusedDates: Set<string>;
+  /** Local calendar date the habit was created — days before this never count toward its denominator. */
+  createdDate: string;
+};
 
 function indexByHabit(habits: Habit[], logs: HabitLog[]): HabitIndex[] {
   const byHabit = new Map<string, HabitLog[]>();
@@ -33,13 +39,18 @@ function indexByHabit(habits: Habit[], logs: HabitLog[]): HabitIndex[] {
       habit,
       completedDates: new Set(habitLogs.filter((l) => l.completed).map((l) => l.date)),
       excusedDates: new Set(habitLogs.filter((l) => l.excused).map((l) => l.date)),
+      createdDate: toLocalISODate(new Date(habit.created_at)),
     };
   });
 }
 
-/** A date "counts" toward a habit's denominator only if scheduled and not excused. */
+/**
+ * A date "counts" toward a habit's denominator only if scheduled, not
+ * excused, and on/after the day the habit was created — otherwise a
+ * brand-new habit looks like it was missed on every day before it existed.
+ */
 function isExpected(idx: HabitIndex, date: string): boolean {
-  return isScheduledOn(idx.habit, date) && !idx.excusedDates.has(date);
+  return date >= idx.createdDate && isScheduledOn(idx.habit, date) && !idx.excusedDates.has(date);
 }
 
 /** Completion % per week over the trailing `weeks` weeks, ending on `today`. Denominator is schedule-aware. */

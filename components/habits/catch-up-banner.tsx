@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { addDays, todayLocalISODate } from "@/lib/date";
+import { addDays, todayLocalISODate, toLocalISODate } from "@/lib/date";
 import { isScheduledOn } from "@/lib/habits/schedule";
 import type { Habit, HabitLog } from "@/lib/types/habits";
 
@@ -37,7 +37,14 @@ export function CatchUpBanner() {
       const habits: Habit[] = (await habitsRes.json()).habits ?? [];
       const logs: HabitLog[] = (await logsRes.json()).logs ?? [];
       const doneIds = new Set(logs.filter((l) => l.completed || l.excused).map((l) => l.habit_id));
-      setPending(habits.filter((h) => isScheduledOn(h, yesterday) && !doneIds.has(h.id)));
+      setPending(
+        habits.filter(
+          (h) =>
+            toLocalISODate(new Date(h.created_at)) <= yesterday &&
+            isScheduledOn(h, yesterday) &&
+            !doneIds.has(h.id)
+        )
+      );
     }
     load();
   }, [yesterday, dismissed]);
