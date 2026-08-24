@@ -7,11 +7,15 @@ export function FrequencyPicker({
   value,
   onChange,
 }: {
-  value: number[];
+  value: number[] | null | undefined;
   onChange: (days: number[]) => void;
 }) {
+  // Defensive fallback: a habit fetched before the frequency_days column
+  // existed (migration not yet applied) comes back with it undefined.
+  const days = value && value.length > 0 ? value : ALL_WEEKDAYS;
+
   function toggle(day: number) {
-    const next = value.includes(day) ? value.filter((d) => d !== day) : [...value, day].sort();
+    const next = days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort();
     if (next.length === 0) return; // a habit must apply to at least one day
     onChange(next);
   }
@@ -19,7 +23,7 @@ export function FrequencyPicker({
   return (
     <div className="flex gap-1">
       {ALL_WEEKDAYS.map((day) => {
-        const active = value.includes(day);
+        const active = days.includes(day);
         return (
           <button
             key={day}
