@@ -2,8 +2,11 @@ import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
 // Master PRD §3/§5: one function all Gemini calls go through, so the
-// provider is swappable later. gemini-2.5-flash is the free-tier model.
-const MODEL = "gemini-2.5-flash";
+// provider is swappable later. The PRD specifies gemini-2.5-flash, but
+// Google has since deprecated it for new API keys ("no longer available to
+// new users" — 404 from the API) in favor of gemini-3.6-flash, verified
+// working directly against this project's key.
+const MODEL = "gemini-3.6-flash";
 
 let client: GoogleGenAI | null = null;
 function getClient(): GoogleGenAI {
