@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LIFECYCLE_ORDER, LIFECYCLE_LABELS } from "@/lib/ideas/ui";
+import { LIFECYCLE_ORDER, LIFECYCLE_LABELS, parseSignalSource } from "@/lib/ideas/ui";
 import type { Idea, IdeaReport, IdeaLifecycleStatus } from "@/lib/types/ideas";
 
 type IdeaWithReports = Idea & { idea_reports: IdeaReport[] };
@@ -79,13 +79,29 @@ export function IdeaDetail({ ideaId }: { ideaId: string }) {
             <span className="rounded-full bg-surface-hover px-2 py-0.5">{idea.category}</span>
             <span className="rounded-full bg-surface-hover px-2 py-0.5">Effort: {idea.effort_estimate}</span>
           </div>
+          {idea.explainer && (
+            <div className="flex items-start gap-2 rounded-lg bg-background p-3 pt-2">
+              <Info className="mt-0.5 size-3.5 shrink-0 text-info" />
+              <p className="text-xs text-text-secondary">{idea.explainer}</p>
+            </div>
+          )}
           {idea.source_signals && idea.source_signals.length > 0 && (
             <div className="pt-2">
               <p className="text-xs font-medium text-text-muted">Inspired by</p>
-              <ul className="list-inside list-disc text-xs text-text-secondary">
-                {idea.source_signals.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
+              <ul className="space-y-1 text-xs text-text-secondary">
+                {idea.source_signals.map((s, i) => {
+                  const { source, text } = parseSignalSource(s);
+                  return (
+                    <li key={i} className="flex items-start gap-1.5">
+                      {source && (
+                        <span className="mt-px shrink-0 rounded-full bg-accent-muted-bg px-1.5 py-0.5 text-[10px] text-primary">
+                          {source}
+                        </span>
+                      )}
+                      <span>{text}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

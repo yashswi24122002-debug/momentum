@@ -13,6 +13,8 @@ export type Idea = {
   status: IdeaStatus;
   rejection_reason: RejectionReason | null;
   source_signals: string[] | null;
+  /** Plain-language explanation of any jargon/tech/trend the idea assumes familiarity with. */
+  explainer: string | null;
   created_at: string;
 };
 

@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(node -e ' *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git check-ignore *)",
+      "Bash(node -r dotenv/config test-generate.mjs dotenv_config_path=.env.local)"
     ]
   }
 }

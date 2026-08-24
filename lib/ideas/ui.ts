@@ -31,3 +31,14 @@ export const REJECTION_REASONS: { value: RejectionReason; label: string }[] = [
   { value: "seen_before", label: "Seen before" },
   { value: "not_feasible", label: "Not feasible" },
 ];
+
+/**
+ * Signals are tagged "[Source] text" when built for the AI prompt (see
+ * app/api/ideas/generate/route.ts) so citations in source_signals keep
+ * their provenance. This splits that back out for display.
+ */
+export function parseSignalSource(signal: string): { source: string | null; text: string } {
+  const match = signal.match(/^\[([^\]]+)\]\s*(.*)$/);
+  if (!match) return { source: null, text: signal };
+  return { source: match[1], text: match[2] };
+}
