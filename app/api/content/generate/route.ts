@@ -18,6 +18,11 @@ const ContentIdeaSchema = z.object({
   trend_signal: z.string(),
   matched_trip_ids: z.array(z.string()),
   assets_gap: z.string(),
+  hashtag: z
+    .string()
+    .describe(
+      "One relevant hashtag for this idea's topic, lowercase, no spaces, no # symbol (e.g. 'vietnamtravel') — used to link to real similar posts, not literally posted as-is."
+    ),
 });
 const ContentIdeasResponseSchema = z.array(ContentIdeaSchema).length(IDEA_COUNT);
 
@@ -52,14 +57,29 @@ function contextLine({ location, tripStage }: GenerateContext): string | null {
   if (!location) return null;
   switch (tripStage) {
     case "planning":
-      return `The creator is planning an upcoming trip to ${location} — favor prep content (packing, budgeting, itinerary planning, what to book ahead) over in-the-moment content.`;
+      return `I'm planning an upcoming trip to ${location} — favor prep content (packing, budgeting, itinerary planning, what to book ahead) over in-the-moment content.`;
     case "traveling":
-      return `The creator is in ${location} right now — favor content they could shoot today or this week.`;
+      return `I'm in ${location} right now — favor content I could shoot today or this week.`;
     case "returned":
-      return `The creator just got back from ${location} — favor reflective/recap content (what I'd do differently, highlights, lessons learned) using footage they'd already have.`;
+      return `I just got back from ${location} — favor reflective/recap content (what I'd do differently, highlights, lessons learned) using footage I'd already have.`;
     default:
-      return `The creator is currently based in/near ${location}.`;
+      return `I'm currently based in/near ${location}.`;
   }
+}
+
+/** Real YouTube signals have their URL embedded as "(https://youtu.be/ID)" — extract it if the model cited one. */
+function extractYouTubeUrl(text: string): string | null {
+  const match = text.match(/https:\/\/youtu\.be\/[\w-]+/);
+  return match ? match[0] : null;
+}
+
+function buildReferenceLink(idea: z.infer<typeof ContentIdeaSchema>): string {
+  if (idea.format === "reel" && idea.trend_source.toLowerCase().includes("youtube")) {
+    const url = extractYouTubeUrl(idea.trend_signal);
+    if (url) return url;
+  }
+  const tag = idea.hashtag.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return `https://www.instagram.com/explore/tags/${tag || "travel"}/`;
 }
 
 function buildPrompt(
@@ -84,23 +104,23 @@ function buildPrompt(
   const formatBlock =
     context.formatPreference !== "any" ? `\n\nStrongly prefer the ${context.formatPreference} format for all ${IDEA_COUNT} ideas.` : "";
 
-  return `You are helping a solo Indian travel content creator plan their next Instagram post (Reel or carousel). Below are trending travel-content signals from Reddit, YouTube, and Google Trends (India-focused), plus a summary of their tagged photo library grouped by trip.${
+  return `You are helping ME plan my next personal travel Instagram post (Reel or carousel). This is MY personal account, not a generic travel brand — every single idea must be ME-CENTRIC: a first-person story about something I actually did, a specific trip or trek I took, or a fun moment with my friends. Never generic third-party advice, listicles, or "5 best places to X" style content — that reads like a brand account, not a person.${
     contextBlock ? `\n\n${contextBlock}` : ""
   }
 
-Generate exactly ${IDEA_COUNT} distinct content ideas that are concrete and realistic — the kind of specific, practical post a real travel account would make, not abstract trend-chasing. Favor formats like:
-- Destination listicles: "5 best places to trek near Delhi", "3 hidden waterfalls in Meghalaya"
-- Personal trip narratives: "My first international trip to Vietnam — what I'd do differently", "48 hours solo in Jaipur"
-- Practical guides: budget breakdowns, packing lists, best time to visit, how-to-get-there
+Below are trending travel-content signals from Reddit, YouTube, and Google Trends (India-focused), plus a summary of my tagged photo library grouped by trip. Use my actual trips from the library as the primary source of real topics when they fit — cite the trip by name. If the library is empty or doesn't cover a good idea, invent a plausible personal narrative instead (a specific real-sounding trek/destination reachable from India, a first-time story, a moment with friends) — never fall back to generic advice content.
 
-Each idea should read like a real post title, not a marketing concept. Use the trend signals as inspiration for what's currently resonating (destinations, formats, themes), not as literal topics to restate.${formatBlock}
+Treat the trend signals as a source of currently-working FORMATS and HOOKS (e.g. "day in my life", "what nobody tells you about X", "expectation vs reality", a POV style), not as literal topics — I am not restating what's trending, I'm telling my own story using a format that's currently resonating.
 
-For each idea, provide: title, format (reel or carousel), which trend source and specific signal inspired it, which trip(s) from the library it could use (matched_trip_ids — the exact trip IDs listed below, or an empty array if none fit — it's fine and expected for an idea to need a destination not yet in the library), and assets_gap describing what's missing (or "none" if fully covered).
+Good title examples: "My First Day in Vietnam", "Indrahar Trek — Solo and Completely Underprepared", "The Time My Friends and I Got Lost in Rishikesh", "What My First International Trip Taught Me", "3 Things Nobody Tells You About Trekking Alone".
+Bad examples (do not produce): "5 Best Places to Trek Near Delhi", "Top Budget Destinations in India", "How to Plan Your Trip to Vietnam" — these are generic advice, not personal.${formatBlock}
+
+For each idea, provide: title, format (reel or carousel), which trend source and specific signal inspired the format/hook (copy the signal text verbatim, including any URL present), which trip(s) from my library it uses (matched_trip_ids — the exact trip IDs listed below, or an empty array if it's a new/invented story), assets_gap describing what's missing (or "none" if fully covered), and one relevant hashtag for the topic.
 
 Trend signals:
 ${signals.map((s) => `- ${s}`).join("\n")}
 
-Photo library (by trip):
+My photo library (by trip):
 ${mediaSummary}${recentTitlesBlock}`;
 }
 
@@ -197,6 +217,7 @@ export async function POST(request: NextRequest) {
           trend_source: idea.trend_source,
           trend_signal: idea.trend_signal,
           matched_media_ids: matchedMediaIds,
+          reference_link: buildReferenceLink(idea),
         };
       })
     )

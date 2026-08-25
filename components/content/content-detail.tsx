@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,7 +82,20 @@ export function ContentDetail({ ideaId }: { ideaId: string }) {
             <span className="rounded-full bg-surface-hover px-2 py-0.5">{idea.format}</span>
             {idea.trend_source && <span className="rounded-full bg-surface-hover px-2 py-0.5">{idea.trend_source}</span>}
           </div>
-          {idea.trend_signal && <p className="text-sm text-text-secondary">{idea.trend_signal}</p>}
+          {idea.trend_signal && (
+            <p className="text-sm text-text-secondary">{idea.trend_signal.replace(/\s*\(https:\/\/youtu\.be\/[\w-]+\)/, "")}</p>
+          )}
+          {idea.reference_link && (
+            <a
+              href={idea.reference_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              <ExternalLink className="size-3.5" />
+              {idea.format === "reel" ? "View reference reel" : "View similar posts"}
+            </a>
+          )}
 
           {idea.matched_media.length > 0 && (
             <div className="grid grid-cols-3 gap-2 pt-2 sm:grid-cols-4">

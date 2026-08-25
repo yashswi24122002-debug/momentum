@@ -37,6 +37,8 @@ export type ContentIdea = {
   trend_source: string | null;
   trend_signal: string | null;
   matched_media_ids: string[] | null;
+  /** A real YouTube reel URL (reels, if sourced from a YouTube signal) or an Instagram hashtag-explore URL (carousels). */
+  reference_link: string | null;
   status: ContentIdeaStatus;
   rejection_reason: ContentRejectionReason | null;
   created_at: string;

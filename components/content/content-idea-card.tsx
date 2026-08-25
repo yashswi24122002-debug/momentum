@@ -1,10 +1,16 @@
 "use client";
 
-import { Check, X, Loader2, Film, Images } from "lucide-react";
+import { Check, X, Loader2, Film, Images, ExternalLink } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
 import type { ContentIdea } from "@/lib/types/content";
+
+// Reel signals embed their real URL as "(https://youtu.be/ID)" so the model
+// can cite it verbatim — strip it back out for clean display text.
+function stripEmbeddedUrl(text: string): string {
+  return text.replace(/\s*\(https:\/\/youtu\.be\/[\w-]+\)/, "").trim();
+}
 
 export function ContentIdeaCard({
   idea,
@@ -56,7 +62,7 @@ export function ContentIdeaCard({
           )}
         </div>
       </div>
-      {idea.trend_signal && <p className="text-sm text-text-secondary">{idea.trend_signal}</p>}
+      {idea.trend_signal && <p className="text-sm text-text-secondary">{stripEmbeddedUrl(idea.trend_signal)}</p>}
       <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-text-muted">
         <span className="flex items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5">
           <FormatIcon className="size-3" />
@@ -66,6 +72,17 @@ export function ContentIdeaCard({
         <span className="rounded-full bg-accent-muted-bg px-2 py-0.5 text-primary">
           {matchedCount} matched photo{matchedCount === 1 ? "" : "s"}
         </span>
+        {idea.reference_link && (
+          <a
+            href={idea.reference_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto flex items-center gap-1 text-text-secondary hover:text-primary"
+          >
+            <ExternalLink className="size-3" />
+            {idea.format === "reel" ? "Reference reel" : "Similar posts"}
+          </a>
+        )}
       </div>
     </Card>
   );
