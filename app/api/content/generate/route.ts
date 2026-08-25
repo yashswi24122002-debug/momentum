@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
@@ -27,10 +27,46 @@ const SOURCE_LABELS: Record<string, string> = {
   "google-trends": "Google Trends",
 };
 
+const TRIP_STAGES = ["general", "planning", "traveling", "returned"] as const;
+type TripStage = (typeof TRIP_STAGES)[number];
+const FORMAT_PREFERENCES = ["any", "reel", "carousel"] as const;
+type FormatPreference = (typeof FORMAT_PREFERENCES)[number];
+
+type GenerateContext = {
+  location: string | null;
+  tripStage: TripStage;
+  formatPreference: FormatPreference;
+};
+
+function parseContext(body: unknown): GenerateContext {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const location = typeof b.location === "string" && b.location.trim() ? b.location.trim() : null;
+  const tripStage = TRIP_STAGES.includes(b.trip_stage as TripStage) ? (b.trip_stage as TripStage) : "general";
+  const formatPreference = FORMAT_PREFERENCES.includes(b.format_preference as FormatPreference)
+    ? (b.format_preference as FormatPreference)
+    : "any";
+  return { location, tripStage, formatPreference };
+}
+
+function contextLine({ location, tripStage }: GenerateContext): string | null {
+  if (!location) return null;
+  switch (tripStage) {
+    case "planning":
+      return `The creator is planning an upcoming trip to ${location} — favor prep content (packing, budgeting, itinerary planning, what to book ahead) over in-the-moment content.`;
+    case "traveling":
+      return `The creator is in ${location} right now — favor content they could shoot today or this week.`;
+    case "returned":
+      return `The creator just got back from ${location} — favor reflective/recap content (what I'd do differently, highlights, lessons learned) using footage they'd already have.`;
+    default:
+      return `The creator is currently based in/near ${location}.`;
+  }
+}
+
 function buildPrompt(
   signals: string[],
   trips: { id: string; name: string; location_summary: string | null; content_worthy_count: number }[],
-  recentTitles: string[]
+  recentTitles: string[],
+  context: GenerateContext
 ): string {
   const mediaSummary =
     trips.length === 0
@@ -44,14 +80,20 @@ function buildPrompt(
       ? ""
       : `\n\nIdeas already generated recently — do NOT repeat these or produce close variants of them:\n${recentTitles.map((t) => `- ${t}`).join("\n")}`;
 
-  return `You are helping a solo Indian travel content creator plan their next Instagram post (Reel or carousel). Below are trending travel-content signals from Reddit, YouTube, and Google Trends (India-focused), plus a summary of their tagged photo library grouped by trip.
+  const contextBlock = contextLine(context);
+  const formatBlock =
+    context.formatPreference !== "any" ? `\n\nStrongly prefer the ${context.formatPreference} format for all ${IDEA_COUNT} ideas.` : "";
+
+  return `You are helping a solo Indian travel content creator plan their next Instagram post (Reel or carousel). Below are trending travel-content signals from Reddit, YouTube, and Google Trends (India-focused), plus a summary of their tagged photo library grouped by trip.${
+    contextBlock ? `\n\n${contextBlock}` : ""
+  }
 
 Generate exactly ${IDEA_COUNT} distinct content ideas that are concrete and realistic — the kind of specific, practical post a real travel account would make, not abstract trend-chasing. Favor formats like:
 - Destination listicles: "5 best places to trek near Delhi", "3 hidden waterfalls in Meghalaya"
 - Personal trip narratives: "My first international trip to Vietnam — what I'd do differently", "48 hours solo in Jaipur"
 - Practical guides: budget breakdowns, packing lists, best time to visit, how-to-get-there
 
-Each idea should read like a real post title, not a marketing concept. Use the trend signals as inspiration for what's currently resonating (destinations, formats, themes), not as literal topics to restate.
+Each idea should read like a real post title, not a marketing concept. Use the trend signals as inspiration for what's currently resonating (destinations, formats, themes), not as literal topics to restate.${formatBlock}
 
 For each idea, provide: title, format (reel or carousel), which trend source and specific signal inspired it, which trip(s) from the library it could use (matched_trip_ids — the exact trip IDs listed below, or an empty array if none fit — it's fine and expected for an idea to need a destination not yet in the library), and assets_gap describing what's missing (or "none" if fully covered).
 
@@ -62,14 +104,19 @@ Photo library (by trip):
 ${mediaSummary}${recentTitlesBlock}`;
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const { supabase, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
+  const context = parseContext(await request.json().catch(() => ({})));
+
+  const youtubeQuery = context.location ? `${context.location} travel shorts` : undefined;
+  const trendsKeyword = context.location ? `${context.location} travel` : undefined;
+
   const [reddit, youtube, googleTrends] = await Promise.all([
     fetchRedditSignals(["travel", "solotravel", "digitalnomad", "travelphotography", "IndiaTravel"]),
-    fetchYouTubeSignals(),
-    fetchGoogleTrendsSignals(),
+    youtubeQuery ? fetchYouTubeSignals(youtubeQuery) : fetchYouTubeSignals(),
+    trendsKeyword ? fetchGoogleTrendsSignals(trendsKeyword) : fetchGoogleTrendsSignals(),
   ]);
 
   for (const result of [reddit, youtube, googleTrends]) {
@@ -113,7 +160,7 @@ export async function POST() {
 
   let ideas: z.infer<typeof ContentIdeasResponseSchema>;
   try {
-    ideas = await generateContent(buildPrompt(signals, tripSummaries, recentTitles), ContentIdeasResponseSchema);
+    ideas = await generateContent(buildPrompt(signals, tripSummaries, recentTitles, context), ContentIdeasResponseSchema);
   } catch (error) {
     await logError(supabase, "content/generate", error instanceof Error ? error.message : String(error));
     const message =

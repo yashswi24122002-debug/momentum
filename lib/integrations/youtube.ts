@@ -1,7 +1,7 @@
 import type { SignalResult } from "@/lib/integrations/types";
 
 /** YouTube Data API v3 search — trending-ish travel Shorts by recent view count. */
-export async function fetchYouTubeSignals(limit = 15): Promise<SignalResult> {
+export async function fetchYouTubeSignals(query = "india travel shorts", limit = 15): Promise<SignalResult> {
   const source = "youtube";
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) {
@@ -11,7 +11,7 @@ export async function fetchYouTubeSignals(limit = 15): Promise<SignalResult> {
   try {
     const params = new URLSearchParams({
       part: "snippet",
-      q: "india travel shorts",
+      q: query,
       type: "video",
       videoDuration: "short",
       order: "viewCount",

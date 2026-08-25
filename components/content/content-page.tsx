@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ContentIdeaCard } from "@/components/content/content-idea-card";
 import { RejectDialog } from "@/components/content/reject-dialog";
+import { GenerateDialog, type GenerateContext } from "@/components/content/generate-dialog";
 import { PipelineBoard, type ReportWithIdea } from "@/components/content/pipeline-board";
 import { todayLocalISODate } from "@/lib/date";
 import type { ContentIdea, ContentRejectionReason } from "@/lib/types/content";
@@ -19,6 +20,7 @@ export function ContentPage() {
   const [generating, setGenerating] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<ContentIdea | null>(null);
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const today = todayLocalISODate();
 
   async function loadAll() {
@@ -38,15 +40,20 @@ export function ContentPage() {
 
   const pendingToday = (allIdeas ?? []).filter((i) => i.status === "pending" && i.date_generated === today);
 
-  async function handleGenerate() {
+  async function handleGenerate(context: GenerateContext) {
     setGenerating(true);
-    const res = await fetch("/api/content/generate", { method: "POST" });
+    const res = await fetch("/api/content/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(context),
+    });
     setGenerating(false);
     if (!res.ok) {
       const { error } = await res.json().catch(() => ({ error: "Couldn't generate ideas — try again." }));
       toast.error(error);
       return;
     }
+    setGenerateDialogOpen(false);
     await loadAll();
   }
 
@@ -104,7 +111,7 @@ export function ContentPage() {
             <Images className="size-4" />
             Library
           </Button>
-          <Button onClick={handleGenerate} disabled={generating}>
+          <Button onClick={() => setGenerateDialogOpen(true)} disabled={generating}>
             {generating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
             {generating ? "Generating…" : "Generate Today's Ideas"}
           </Button>
@@ -140,6 +147,13 @@ export function ContentPage() {
         open={rejectTarget !== null}
         onOpenChange={(open) => !open && setRejectTarget(null)}
         onConfirm={handleReject}
+      />
+
+      <GenerateDialog
+        open={generateDialogOpen}
+        onOpenChange={setGenerateDialogOpen}
+        onGenerate={handleGenerate}
+        generating={generating}
       />
     </div>
   );
