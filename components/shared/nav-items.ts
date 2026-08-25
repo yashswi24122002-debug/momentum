@@ -8,6 +8,7 @@ import {
   CalendarDays,
   BarChart3,
   History,
+  Images,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,7 +46,15 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "History", href: "/ideas/history", icon: History },
     ],
   },
-  { label: "Content", href: "/content", icon: Camera },
+  {
+    label: "Content",
+    href: "/content",
+    icon: Camera,
+    children: [
+      { label: "Today", href: "/content", icon: Camera },
+      { label: "Library", href: "/content/library", icon: Images },
+    ],
+  },
   { label: "Masters", href: "/masters-abroad", icon: GraduationCap },
   { label: "Jobs", href: "/jobs", icon: Briefcase },
 ];
