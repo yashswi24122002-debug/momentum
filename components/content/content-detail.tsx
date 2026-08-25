@@ -83,18 +83,27 @@ export function ContentDetail({ ideaId }: { ideaId: string }) {
             {idea.trend_source && <span className="rounded-full bg-surface-hover px-2 py-0.5">{idea.trend_source}</span>}
           </div>
           {idea.trend_signal && (
-            <p className="text-sm text-text-secondary">{idea.trend_signal.replace(/\s*\(https:\/\/youtu\.be\/[\w-]+\)/, "")}</p>
+            <p className="text-sm text-text-secondary">
+              {idea.trend_signal
+                .replace(/\s*\(https:\/\/youtu\.be\/[\w-]+\)/, "")
+                .replace(/\s*\(https:\/\/www\.reddit\.com\/r\/\S+\)/, "")}
+            </p>
           )}
-          {idea.reference_link && (
-            <a
-              href={idea.reference_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-            >
-              <ExternalLink className="size-3.5" />
-              {idea.format === "reel" ? "View reference reel" : "View similar posts"}
-            </a>
+          {idea.reference_links.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3">
+              {idea.reference_links.map((ref) => (
+                <a
+                  key={ref.url}
+                  href={ref.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                >
+                  <ExternalLink className="size-3.5" />
+                  {ref.source}
+                </a>
+              ))}
+            </div>
           )}
 
           {idea.matched_media.length > 0 && (

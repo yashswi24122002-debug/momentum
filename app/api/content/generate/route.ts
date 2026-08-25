@@ -16,6 +16,12 @@ const ContentIdeaSchema = z.object({
   format: z.enum(["reel", "carousel"]),
   trend_source: z.string(),
   trend_signal: z.string(),
+  additional_signals: z
+    .array(z.string())
+    .max(2)
+    .describe(
+      "0-2 more signals (verbatim, including any embedded URL) that also relate to this idea, ideally from a DIFFERENT source than trend_signal — used to provide multiple reference links from different sources. Leave empty if nothing else fits."
+    ),
   matched_trip_ids: z.array(z.string()),
   assets_gap: z.string(),
   hashtag: z
@@ -67,19 +73,42 @@ function contextLine({ location, tripStage }: GenerateContext): string | null {
   }
 }
 
-/** Real YouTube signals have their URL embedded as "(https://youtu.be/ID)" — extract it if the model cited one. */
-function extractYouTubeUrl(text: string): string | null {
-  const match = text.match(/https:\/\/youtu\.be\/[\w-]+/);
-  return match ? match[0] : null;
+// Real signal URLs are embedded in the signal text itself (see
+// lib/integrations/youtube.ts and the embedUrls flag on fetchRedditSignals)
+// so they can be extracted here rather than trusting the model to
+// construct a URL from scratch, which LLMs reliably hallucinate.
+function extractUrl(text: string): { source: string; url: string } | null {
+  const youtube = text.match(/https:\/\/youtu\.be\/[\w-]+/);
+  if (youtube) return { source: "YouTube", url: youtube[0] };
+  const reddit = text.match(/https:\/\/www\.reddit\.com\/r\/\S+/);
+  if (reddit) return { source: "Reddit", url: reddit[0].replace(/[),.]+$/, "") };
+  return null;
 }
 
-function buildReferenceLink(idea: z.infer<typeof ContentIdeaSchema>): string {
-  if (idea.format === "reel" && idea.trend_source.toLowerCase().includes("youtube")) {
-    const url = extractYouTubeUrl(idea.trend_signal);
-    if (url) return url;
+/**
+ * Up to 3 real reference links from different sources: a link per distinct
+ * signal cited (trend_signal + additional_signals), plus an Instagram
+ * hashtag-explore link (always valid, always shows real relevant posts —
+ * the closest honest substitute for a specific post link, which no
+ * Instagram API in this stack could provide).
+ */
+function buildReferenceLinks(idea: z.infer<typeof ContentIdeaSchema>): { source: string; url: string }[] {
+  const links: { source: string; url: string }[] = [];
+  const seen = new Set<string>();
+
+  for (const signal of [idea.trend_signal, ...idea.additional_signals]) {
+    const extracted = extractUrl(signal);
+    if (extracted && !seen.has(extracted.url)) {
+      links.push(extracted);
+      seen.add(extracted.url);
+    }
   }
-  const tag = idea.hashtag.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return `https://www.instagram.com/explore/tags/${tag || "travel"}/`;
+
+  const tag = idea.hashtag.toLowerCase().replace(/[^a-z0-9]/g, "") || "travel";
+  const igUrl = `https://www.instagram.com/explore/tags/${tag}/`;
+  if (!seen.has(igUrl)) links.push({ source: "Instagram", url: igUrl });
+
+  return links.slice(0, 3);
 }
 
 function buildPrompt(
@@ -115,7 +144,7 @@ Treat the trend signals as a source of currently-working FORMATS and HOOKS (e.g.
 Good title examples: "My First Day in Vietnam", "Indrahar Trek — Solo and Completely Underprepared", "The Time My Friends and I Got Lost in Rishikesh", "What My First International Trip Taught Me", "3 Things Nobody Tells You About Trekking Alone".
 Bad examples (do not produce): "5 Best Places to Trek Near Delhi", "Top Budget Destinations in India", "How to Plan Your Trip to Vietnam" — these are generic advice, not personal.${formatBlock}
 
-For each idea, provide: title, format (reel or carousel), which trend source and specific signal inspired the format/hook (copy the signal text verbatim, including any URL present), which trip(s) from my library it uses (matched_trip_ids — the exact trip IDs listed below, or an empty array if it's a new/invented story), assets_gap describing what's missing (or "none" if fully covered), and one relevant hashtag for the topic.
+For each idea, provide: title, format (reel or carousel), which trend source and specific signal inspired the format/hook (copy the signal text verbatim, including any URL present), 0-2 additional_signals from OTHER sources that also relate (verbatim, including any URL — for multiple reference links from different sources; leave empty if nothing else fits, don't force it), which trip(s) from my library it uses (matched_trip_ids — the exact trip IDs listed below, or an empty array if it's a new/invented story), assets_gap describing what's missing (or "none" if fully covered), and one relevant hashtag for the topic.
 
 Trend signals:
 ${signals.map((s) => `- ${s}`).join("\n")}
@@ -134,7 +163,7 @@ export async function POST(request: NextRequest) {
   const trendsKeyword = context.location ? `${context.location} travel` : undefined;
 
   const [reddit, youtube, googleTrends] = await Promise.all([
-    fetchRedditSignals(["travel", "solotravel", "digitalnomad", "travelphotography", "IndiaTravel"]),
+    fetchRedditSignals(["travel", "solotravel", "digitalnomad", "travelphotography", "IndiaTravel"], 10, "day", true),
     youtubeQuery ? fetchYouTubeSignals(youtubeQuery) : fetchYouTubeSignals(),
     trendsKeyword ? fetchGoogleTrendsSignals(trendsKeyword) : fetchGoogleTrendsSignals(),
   ]);
@@ -217,7 +246,7 @@ export async function POST(request: NextRequest) {
           trend_source: idea.trend_source,
           trend_signal: idea.trend_signal,
           matched_media_ids: matchedMediaIds,
-          reference_link: buildReferenceLink(idea),
+          reference_links: buildReferenceLinks(idea),
         };
       })
     )

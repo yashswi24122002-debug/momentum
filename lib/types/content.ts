@@ -24,6 +24,8 @@ export type Media = {
 /** Media with a freshly-generated signed URL — the "media" Storage bucket is private. */
 export type MediaWithUrl = Media & { signed_url: string | null };
 
+export type ContentReferenceLink = { source: string; url: string };
+
 export type ContentFormat = "reel" | "carousel";
 export type ContentIdeaStatus = "pending" | "approved" | "rejected";
 export type ContentLifecycleStatus = "backlog" | "shooting_editing" | "ready" | "posted";
@@ -37,8 +39,8 @@ export type ContentIdea = {
   trend_source: string | null;
   trend_signal: string | null;
   matched_media_ids: string[] | null;
-  /** A real YouTube reel URL (reels, if sourced from a YouTube signal) or an Instagram hashtag-explore URL (carousels). */
-  reference_link: string | null;
+  /** Up to 3 real links from different sources (YouTube/Reddit signal URLs, plus an Instagram hashtag-explore link). */
+  reference_links: ContentReferenceLink[];
   status: ContentIdeaStatus;
   rejection_reason: ContentRejectionReason | null;
   created_at: string;

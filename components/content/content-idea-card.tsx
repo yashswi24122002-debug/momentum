@@ -6,10 +6,14 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
 import type { ContentIdea } from "@/lib/types/content";
 
-// Reel signals embed their real URL as "(https://youtu.be/ID)" so the model
-// can cite it verbatim — strip it back out for clean display text.
+// Signals embed their real URL — "(https://youtu.be/ID)" or a Reddit
+// permalink — so the model can cite it verbatim. Strip it back out for
+// clean display text.
 function stripEmbeddedUrl(text: string): string {
-  return text.replace(/\s*\(https:\/\/youtu\.be\/[\w-]+\)/, "").trim();
+  return text
+    .replace(/\s*\(https:\/\/youtu\.be\/[\w-]+\)/, "")
+    .replace(/\s*\(https:\/\/www\.reddit\.com\/r\/\S+\)/, "")
+    .trim();
 }
 
 export function ContentIdeaCard({
@@ -72,18 +76,23 @@ export function ContentIdeaCard({
         <span className="rounded-full bg-accent-muted-bg px-2 py-0.5 text-primary">
           {matchedCount} matched photo{matchedCount === 1 ? "" : "s"}
         </span>
-        {idea.reference_link && (
-          <a
-            href={idea.reference_link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-auto flex items-center gap-1 text-text-secondary hover:text-primary"
-          >
-            <ExternalLink className="size-3" />
-            {idea.format === "reel" ? "Reference reel" : "Similar posts"}
-          </a>
-        )}
       </div>
+      {idea.reference_links.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          {idea.reference_links.map((ref) => (
+            <a
+              key={ref.url}
+              href={ref.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-text-secondary hover:border-primary hover:text-primary"
+            >
+              <ExternalLink className="size-3" />
+              {ref.source}
+            </a>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
