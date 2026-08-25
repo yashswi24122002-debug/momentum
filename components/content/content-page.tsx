@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Camera, Sparkles, Loader2, Images } from "lucide-react";
+import { Camera, Sparkles, Loader2, Images, History } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -96,6 +96,10 @@ export function ContentPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-text-primary">Content</h1>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" render={<Link href="/content/history" />} nativeButton={false}>
+            <History className="size-4" />
+            History
+          </Button>
           <Button variant="ghost" size="sm" render={<Link href="/content/library" />} nativeButton={false}>
             <Images className="size-4" />
             Library

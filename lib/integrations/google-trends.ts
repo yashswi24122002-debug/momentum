@@ -9,10 +9,10 @@ import type { SignalResult } from "@/lib/integrations/types";
  * treat it as the most likely of the three sources to eventually break —
  * same isolated-failure handling as everything else in lib/integrations/.
  */
-export async function fetchGoogleTrendsSignals(keyword = "travel destinations"): Promise<SignalResult> {
+export async function fetchGoogleTrendsSignals(keyword = "travel destinations", geo = "IN"): Promise<SignalResult> {
   const source = "google-trends";
   try {
-    const raw = await googleTrends.relatedQueries({ keyword, geo: "US" });
+    const raw = await googleTrends.relatedQueries({ keyword, geo });
     const json = JSON.parse(raw);
     const rankedLists = json?.default?.rankedList ?? [];
 

@@ -52,6 +52,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Camera,
     children: [
       { label: "Today", href: "/content", icon: Camera },
+      { label: "History", href: "/content/history", icon: History },
       { label: "Library", href: "/content/library", icon: Images },
     ],
   },

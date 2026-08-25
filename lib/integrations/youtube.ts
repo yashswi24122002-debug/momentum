@@ -11,10 +11,12 @@ export async function fetchYouTubeSignals(limit = 15): Promise<SignalResult> {
   try {
     const params = new URLSearchParams({
       part: "snippet",
-      q: "travel shorts",
+      q: "india travel shorts",
       type: "video",
       videoDuration: "short",
       order: "viewCount",
+      regionCode: "IN",
+      relevanceLanguage: "en",
       maxResults: String(limit),
       key: apiKey,
     });
