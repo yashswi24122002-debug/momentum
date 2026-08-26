@@ -9,6 +9,8 @@ import {
   BarChart3,
   History,
   Images,
+  FileText,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -56,6 +58,17 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Library", href: "/content/library", icon: Images },
     ],
   },
-  { label: "Masters", href: "/masters-abroad", icon: GraduationCap },
+  {
+    label: "Masters",
+    href: "/masters-abroad",
+    icon: GraduationCap,
+    children: [
+      { label: "Dashboard", href: "/masters-abroad", icon: GraduationCap },
+      { label: "Universities", href: "/masters-abroad/universities", icon: Landmark },
+      { label: "Tasks", href: "/masters-abroad/tasks", icon: ListChecks },
+      { label: "Timeline", href: "/masters-abroad/timeline", icon: CalendarDays },
+      { label: "Documents", href: "/masters-abroad/documents", icon: FileText },
+    ],
+  },
   { label: "Jobs", href: "/jobs", icon: Briefcase },
 ];
