@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Briefcase, Send, ListChecks } from "lucide-react";
+import { Briefcase, Send, ListChecks, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
@@ -24,6 +26,9 @@ const FIT_SCORE_OPTIONS = [
   { label: "80+", value: 80 },
 ];
 
+const ALL_SOURCES = "__all__";
+type SortBy = "fit" | "newest";
+
 export function JobFeed() {
   const [jobs, setJobs] = useState<JobPosting[] | null>(null);
   const [filter, setFilter] = useState<JobPostingStatus>("new");
@@ -34,6 +39,10 @@ export function JobFeed() {
   const [drafting, setDrafting] = useState(false);
   const [draftContact, setDraftContact] = useState<HunterContact | null>(null);
   const [checkContactTarget, setCheckContactTarget] = useState<JobPosting | null>(null);
+  const [search, setSearch] = useState("");
+  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState(ALL_SOURCES);
+  const [sortBy, setSortBy] = useState<SortBy>("fit");
 
   useEffect(() => {
     async function load() {
@@ -107,7 +116,20 @@ export function JobFeed() {
     );
   }
 
-  const filtered = jobs.filter((j) => j.status === filter);
+  const sources = Array.from(new Set(jobs.map((j) => j.source))).sort();
+
+  const query = search.trim().toLowerCase();
+  const filtered = jobs
+    .filter((j) => j.status === filter)
+    .filter((j) => (remoteOnly ? j.remote : true))
+    .filter((j) => (sourceFilter === ALL_SOURCES ? true : j.source === sourceFilter))
+    .filter((j) => (query ? j.company.toLowerCase().includes(query) || j.role_title.toLowerCase().includes(query) : true))
+    .sort((a, b) => {
+      if (sortBy === "newest") {
+        return (b.posted_date ?? "").localeCompare(a.posted_date ?? "");
+      }
+      return (b.fit_score ?? 0) - (a.fit_score ?? 0);
+    });
 
   return (
     <div className="flex flex-1 flex-col gap-6 pb-16">
@@ -151,6 +173,56 @@ export function JobFeed() {
             </Button>
           ))}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-48">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-muted" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search company or role…"
+            className="pl-8 pr-8"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+              aria-label="Clear search"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+
+        <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v ?? ALL_SOURCES)}>
+          <SelectTrigger size="sm" className="w-36 shrink-0 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SOURCES}>All sources</SelectItem>
+            {sources.map((s) => (
+              <SelectItem key={s} value={s} className="capitalize">
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={sortBy} onValueChange={(v) => setSortBy((v as SortBy) ?? "fit")}>
+          <SelectTrigger size="sm" className="w-32 shrink-0 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fit">Best fit</SelectItem>
+            <SelectItem value="newest">Newest</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button variant={remoteOnly ? "default" : "outline"} size="sm" onClick={() => setRemoteOnly((v) => !v)}>
+          Remote only
+        </Button>
       </div>
 
       {filtered.length === 0 ? (

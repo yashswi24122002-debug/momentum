@@ -39,6 +39,7 @@ export async function fetchHiringCafeJobs(): Promise<JobSourceResult> {
       const jobInformation = h.job_information as { title?: string } | undefined;
       const publishDate = v5.estimated_publish_date as string | undefined;
       const minYoe = v5.min_industry_and_role_yoe;
+      const countries = v5.workplace_countries;
 
       return {
         source,
@@ -51,6 +52,7 @@ export async function fetchHiringCafeJobs(): Promise<JobSourceResult> {
         tech_stack_tags: Array.isArray(v5.technical_tools) ? (v5.technical_tools as string[]) : [],
         posted_date: publishDate ? publishDate.slice(0, 10) : null,
         min_years_experience: typeof minYoe === "number" ? minYoe : null,
+        workplace_country: Array.isArray(countries) && typeof countries[0] === "string" ? countries[0] : null,
       };
     });
 

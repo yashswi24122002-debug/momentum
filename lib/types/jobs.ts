@@ -81,4 +81,11 @@ export type RawJobPosting = {
    * from description_raw itself.
    */
   min_years_experience?: number | null;
+  /**
+   * ISO country code the role is physically based in, when a source
+   * provides it as structured data (currently only hiring.cafe). Leave
+   * unset for other sources — computeFitScore falls back to matching known
+   * India city/country names in `location` itself.
+   */
+  workplace_country?: string | null;
 };

@@ -1,12 +1,13 @@
 import { ROLE_KEYWORDS, EXCLUDE_TITLE_KEYWORDS, TECH_STACK_KEYWORDS, USER_YEARS_EXPERIENCE, YOE_TOLERANCE_YEARS } from "@/lib/jobs/config";
 import { extractMinYearsExperience } from "@/lib/jobs/extract-experience";
+import { isIndiaLocation } from "@/lib/jobs/location";
 import type { RawJobPosting } from "@/lib/types/jobs";
 
 /**
  * 0-100 fit score from keyword overlap only (no AI call — this runs on every
  * aggregated posting, so it needs to be cheap and deterministic).
  *
- * Hard-gated on three things, any of which zeroes the score entirely:
+ * Hard-gated on four things, any of which zeroes the score entirely:
  * 1. Role title actually matching one of ROLE_KEYWORDS — without this, a
  *    "DevOps Engineer" or "Sales Engineer" posting whose description
  *    happens to mention React/Node would still score high on tech overlap
@@ -21,8 +22,12 @@ import type { RawJobPosting } from "@/lib/types/jobs";
  *    structured data (min_years_experience); every other source falls back
  *    to a regex extraction off description_raw, which is a heuristic and
  *    can occasionally misfire in either direction.
+ * 4. Not an on-site (non-remote) role based outside India — you can't
+ *    commute to an onsite role in another country, so an onsite posting
+ *    only counts if it's actually in India; remote postings pass regardless
+ *    of where the company itself is based.
  *
- * Only postings that pass all three gates get ranked further by tech-stack match.
+ * Only postings that pass all four gates get ranked further by tech-stack match.
  */
 export function computeFitScore(job: RawJobPosting): number {
   const roleTitle = job.role_title.toLowerCase();
@@ -36,6 +41,11 @@ export function computeFitScore(job: RawJobPosting): number {
   const requiredYoe = job.min_years_experience ?? extractMinYearsExperience(job.description_raw);
   if (requiredYoe !== null && requiredYoe !== undefined && requiredYoe > USER_YEARS_EXPERIENCE + YOE_TOLERANCE_YEARS) {
     return 0;
+  }
+
+  if (!job.remote) {
+    const isIndia = job.workplace_country === "IN" || isIndiaLocation(job.location);
+    if (!isIndia) return 0;
   }
 
   const haystack = [job.role_title, job.description_raw ?? "", ...(job.tech_stack_tags ?? [])]
