@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { sendEmail } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/mailer";
 import { addDays, todayLocalISODate } from "@/lib/date";
 
 export type OutreachRow = {

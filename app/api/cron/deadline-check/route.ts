@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendEmail } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/mailer";
 import { logError } from "@/lib/errors/log-error";
 import { todayLocalISODate, parseLocalISODate } from "@/lib/date";
 import type { Task } from "@/lib/types/masters-abroad";
