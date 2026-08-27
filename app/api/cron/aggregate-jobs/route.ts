@@ -8,6 +8,7 @@ import { fetchRemotiveJobs } from "@/lib/integrations/remotive";
 import { fetchArbeitnowJobs } from "@/lib/integrations/arbeitnow";
 import { fetchAdzunaJobs } from "@/lib/integrations/adzuna";
 import { fetchJoobleJobs } from "@/lib/integrations/jooble";
+import { fetchHiringCafeJobs } from "@/lib/integrations/hiringcafe";
 import { GREENHOUSE_COMPANIES, LEVER_COMPANIES } from "@/lib/jobs/config";
 import { computeFitScore } from "@/lib/jobs/fit-score";
 import type { JobSourceResult } from "@/lib/integrations/greenhouse";
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
     fetchArbeitnowJobs(),
     fetchAdzunaJobs(),
     fetchJoobleJobs(),
+    fetchHiringCafeJobs(),
   ]);
 
   for (const result of results as JobSourceResult[]) {

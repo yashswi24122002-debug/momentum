@@ -157,7 +157,7 @@ export function JobFeed() {
         <EmptyState
           icon={Briefcase}
           title={`No ${JOB_STATUS_LABELS[filter].toLowerCase()} postings`}
-          description="Postings are aggregated daily from Greenhouse, Lever, RemoteOK, Remotive, Arbeitnow, Adzuna, and Jooble."
+          description="Postings are aggregated daily from Greenhouse, Lever, RemoteOK, Remotive, Arbeitnow, Adzuna, Jooble, and hiring.cafe."
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
