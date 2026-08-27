@@ -3,6 +3,14 @@ export type UniversityStatus = "researching" | "shortlisted" | "applying" | "app
 export type TaskCategory = "documents" | "exams" | "financial" | "visa" | "application" | "language";
 export type TaskStatus = "not_started" | "in_progress" | "blocked" | "done";
 
+export type FitScores = { gpa: number; budget: number; specialization: number; overall: number };
+
+export type UniversityRequirements = {
+  estimated_requirements?: string;
+  tuition_estimate?: string;
+  fit_scores?: FitScores;
+};
+
 export type University = {
   id: string;
   name: string;
@@ -11,11 +19,13 @@ export type University = {
   intake_target: string | null;
   deadline_uni_assist: string | null;
   deadline_direct: string | null;
-  requirements: Record<string, unknown> | null;
+  requirements: UniversityRequirements | null;
   source: UniversitySource;
   verified: boolean;
   status: UniversityStatus;
   fit_notes: string | null;
+  /** Real official program page URL — curated match, or a Google search fallback. Never AI-generated. */
+  official_url: string | null;
   created_at: string;
 };
 

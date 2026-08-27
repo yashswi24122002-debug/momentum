@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, Columns3 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,13 +10,19 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { GraduationCap } from "lucide-react";
 import { UniversityCard } from "@/components/masters-abroad/university-card";
 import { DiscoveryDialog } from "@/components/masters-abroad/discovery-dialog";
+import { ComparisonDialog } from "@/components/masters-abroad/comparison-dialog";
+import { DeadlineHints } from "@/components/masters-abroad/deadline-hints";
 import { UNIVERSITY_STATUS_ORDER, UNIVERSITY_STATUS_LABELS } from "@/lib/masters-abroad/ui";
 import type { University, UniversityStatus, DiscoveryProfile } from "@/lib/types/masters-abroad";
+
+const MAX_COMPARE = 3;
 
 export function UniversityBoard() {
   const [universities, setUniversities] = useState<University[] | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [discovering, setDiscovering] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -66,6 +72,17 @@ export function UniversityBoard() {
     if (!res.ok) toast.error("Couldn't update that — try again.");
   }
 
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) return prev.filter((i) => i !== id);
+      if (prev.length >= MAX_COMPARE) {
+        toast.error(`You can compare up to ${MAX_COMPARE} at a time.`);
+        return prev;
+      }
+      return [...prev, id];
+    });
+  }
+
   if (universities === null) {
     return (
       <div className="space-y-4">
@@ -75,8 +92,10 @@ export function UniversityBoard() {
     );
   }
 
+  const selectedUniversities = universities.filter((u) => selectedIds.includes(u.id));
+
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <div className="flex flex-1 flex-col gap-6 pb-16">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" render={<Link href="/masters-abroad" />} nativeButton={false}>
@@ -89,6 +108,8 @@ export function UniversityBoard() {
           Discover
         </Button>
       </div>
+
+      <DeadlineHints />
 
       {universities.length === 0 ? (
         <EmptyState
@@ -113,6 +134,9 @@ export function UniversityBoard() {
                       university={u}
                       onStatusChange={(s) => handleStatusChange(u.id, s)}
                       onToggleVerified={() => handleToggleVerified(u.id, !u.verified)}
+                      selected={selectedIds.includes(u.id)}
+                      onToggleSelected={() => toggleSelected(u.id)}
+                      selectionDisabled={selectedIds.length >= MAX_COMPARE}
                     />
                   ))}
                 </div>
@@ -122,7 +146,17 @@ export function UniversityBoard() {
         </div>
       )}
 
+      {selectedIds.length >= 2 && (
+        <div className="fixed inset-x-0 bottom-16 z-40 flex justify-center md:bottom-4 md:ml-28">
+          <Button size="lg" onClick={() => setCompareOpen(true)} className="shadow-lg">
+            <Columns3 className="size-4" />
+            Compare ({selectedIds.length})
+          </Button>
+        </div>
+      )}
+
       <DiscoveryDialog open={dialogOpen} onOpenChange={setDialogOpen} onDiscover={handleDiscover} discovering={discovering} />
+      <ComparisonDialog universities={selectedUniversities} open={compareOpen} onOpenChange={setCompareOpen} />
     </div>
   );
 }
