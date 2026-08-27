@@ -10,7 +10,9 @@ import type { JobSourceResult } from "@/lib/integrations/greenhouse";
  * (their search/pagination), so this fetches only the default homepage
  * listing once — geo-targeted server-side (India, from this deployment's
  * IP), unfiltered by role — same firehose-then-filter pattern as RemoteOK.
- * computeFitScore's role-title gate does the actual filtering downstream.
+ * computeFitScore's role-title and experience gates do the actual
+ * filtering downstream; this source's min_industry_and_role_yoe field
+ * feeds the experience gate directly rather than via regex extraction.
  */
 export async function fetchHiringCafeJobs(): Promise<JobSourceResult> {
   const source = "hiringcafe";
@@ -36,6 +38,7 @@ export async function fetchHiringCafeJobs(): Promise<JobSourceResult> {
       const attributedOrg = h.attributed_org as { name?: string } | undefined;
       const jobInformation = h.job_information as { title?: string } | undefined;
       const publishDate = v5.estimated_publish_date as string | undefined;
+      const minYoe = v5.min_industry_and_role_yoe;
 
       return {
         source,
@@ -47,6 +50,7 @@ export async function fetchHiringCafeJobs(): Promise<JobSourceResult> {
         description_raw: (v5.requirements_summary as string) ?? null,
         tech_stack_tags: Array.isArray(v5.technical_tools) ? (v5.technical_tools as string[]) : [],
         posted_date: publishDate ? publishDate.slice(0, 10) : null,
+        min_years_experience: typeof minYoe === "number" ? minYoe : null,
       };
     });
 

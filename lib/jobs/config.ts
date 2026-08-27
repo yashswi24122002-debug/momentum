@@ -38,6 +38,12 @@ export const LEVER_COMPANIES = ["palantir"];
 // location (Noida). Change to your target market.
 export const ADZUNA_COUNTRY = "in";
 
+// Your actual years of experience, per the resume on file — computeFitScore
+// hard-excludes postings whose required YoE exceeds this by more than
+// YOE_TOLERANCE_YEARS. Update this the moment your real experience changes.
+export const USER_YEARS_EXPERIENCE = 3;
+export const YOE_TOLERANCE_YEARS = 1;
+
 // Software engineering roles only — general SWE/SDE, frontend, backend,
 // full-stack/MERN, plus technical PM and forward-deployed engineer.
 // Non-matching roles (sales, marketing, etc.) are hard-filtered out by
@@ -59,6 +65,13 @@ export const ROLE_KEYWORDS = [
   "forward deployed engineer",
   "fde",
 ];
+
+// Plain substring matching against ROLE_KEYWORDS has a false-positive: the
+// word "engineering" contains "engineer" as its first 8 letters, so
+// "Software Engineering Director" matches "software engineer" even though
+// it's a leadership role, not an IC one. These titles are excluded
+// regardless of ROLE_KEYWORDS match — checked as whole words.
+export const EXCLUDE_TITLE_KEYWORDS = ["director", "vp", "vice president", "head of", "chief", "principal", "staff", "president"];
 
 // Used for both aggregation search terms and fit-score matching —
 // sourced from the resume on file (React/Node/AI-integration background).

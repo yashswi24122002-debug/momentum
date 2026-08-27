@@ -11,7 +11,10 @@ import { fetchJoobleJobs } from "@/lib/integrations/jooble";
 import { fetchHiringCafeJobs } from "@/lib/integrations/hiringcafe";
 import { GREENHOUSE_COMPANIES, LEVER_COMPANIES } from "@/lib/jobs/config";
 import { computeFitScore } from "@/lib/jobs/fit-score";
+import { addDays, todayLocalISODate } from "@/lib/date";
 import type { JobSourceResult } from "@/lib/integrations/greenhouse";
+
+const MAX_POSTING_AGE_DAYS = 30;
 
 function dedupeKey(company: string, roleTitle: string, source: string): string {
   return `${source}::${company.trim().toLowerCase()}::${roleTitle.trim().toLowerCase()}`;
@@ -29,6 +32,21 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createAdminClient();
+  const cutoffDate = addDays(todayLocalISODate(), -MAX_POSTING_AGE_DAYS);
+  const cutoffTimestamp = new Date(cutoffDate).toISOString();
+
+  // Prune aging-out postings on every run — a job that was fresh 20 days
+  // ago and is still sitting at status "new" untouched is now stale and
+  // should disappear, not just be excluded from future inserts. Postings
+  // with no known posted_date fall back to discovered_at, since a job we
+  // found 2 months ago with an unreported date is equally stale to look at.
+  const { error: pruneError } = await supabase
+    .from("job_postings")
+    .delete()
+    .or(`posted_date.lt.${cutoffDate},and(posted_date.is.null,discovered_at.lt.${cutoffTimestamp})`);
+  if (pruneError) {
+    await logError(supabase, "cron/aggregate-jobs", `prune: ${pruneError.message}`);
+  }
 
   const results = await Promise.all([
     fetchGreenhouseJobs(GREENHOUSE_COMPANIES),
@@ -61,9 +79,14 @@ export async function GET(request: NextRequest) {
   );
 
   let skippedNonEngineering = 0;
+  let skippedStale = 0;
   const toInsert = [];
   for (const result of results as JobSourceResult[]) {
     for (const job of result.postings) {
+      if (job.posted_date && job.posted_date < cutoffDate) {
+        skippedStale++;
+        continue;
+      }
       const fitScore = computeFitScore(job);
       if (fitScore === 0) {
         skippedNonEngineering++;
@@ -100,6 +123,7 @@ export async function GET(request: NextRequest) {
     fetched: (results as JobSourceResult[]).reduce((sum, r) => sum + r.postings.length, 0),
     inserted: toInsert.length,
     skippedNonEngineering,
+    skippedStale,
     sourceErrors: (results as JobSourceResult[]).filter((r) => r.error).map((r) => r.source),
   });
 }
