@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/deadline-check",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/aggregate-jobs",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/send-scheduled-emails",
+      "schedule": "15 4-12 * * 1-5"
     }
   ]
 }

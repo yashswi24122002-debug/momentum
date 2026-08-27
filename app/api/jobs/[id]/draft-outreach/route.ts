@@ -1,0 +1,106 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { requireUser } from "@/lib/supabase/route-guard";
+import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
+import { findContactsForDomain, guessDomain, type HunterContact } from "@/lib/integrations/hunter";
+import { logError } from "@/lib/errors/log-error";
+
+const RECRUITING_HINTS = ["recruit", "talent", "hr", "people", "hiring"];
+
+function domainFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function pickBestContact(contacts: HunterContact[]) {
+  const recruiting = contacts.find((c) => RECRUITING_HINTS.some((h) => c.position?.toLowerCase().includes(h)));
+  return recruiting ?? contacts[0] ?? null;
+}
+
+const DraftSchema = z.object({
+  subject: z.string().describe("A short, specific email subject line — not generic ('Application for X role' is too generic; reference the actual company/role)."),
+  body: z.string().describe("The full email body, plain text, first-person, ready to send after light editing. No placeholders like [Company Name] — use the real values given."),
+});
+
+function buildPrompt(
+  job: { company: string; role_title: string; location: string | null; description_raw: string | null },
+  resume: { name: string; focus_area: string | null } | null,
+  contactFirstName: string | null
+): string {
+  return `Write a short, genuine cold-outreach email from me to ${contactFirstName ? `${contactFirstName}, a` : "a"} recruiter/hiring contact at ${job.company}, about their "${job.role_title}" role${job.location ? ` (${job.location})` : ""}.
+
+Tone: direct, confident, not desperate, not overly formal. 3-4 short paragraphs max. Mention 1-2 concrete technical skills that plausibly match the role (infer from the role title/description below — don't invent skills that don't fit). End with a clear, low-friction ask (a quick call, or just "happy to share more").${
+    resume ? `\n\nMy resume on file is focused on: ${resume.focus_area ?? resume.name}.` : ""
+  }
+
+Greeting: ${contactFirstName ? `open with "Hi ${contactFirstName},"` : `I don't know the recipient's name — open with "Hi there," and never use a bracketed placeholder like [Name].`}
+
+Role details:
+${job.description_raw ? job.description_raw.slice(0, 2000) : "(no description available — write generally about the role title/company)"}`;
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { supabase, unauthorized } = await requireUser();
+  if (unauthorized) return unauthorized;
+
+  const { id } = await params;
+  const body = await request.json().catch(() => ({}));
+  const resumeId = typeof body.resume_id === "string" ? body.resume_id : null;
+
+  const { data: job, error: jobError } = await supabase.from("job_postings").select("*").eq("id", id).single();
+  if (jobError || !job) {
+    return NextResponse.json({ error: "Job posting not found" }, { status: 404 });
+  }
+
+  let resume: { id: string; name: string; focus_area: string | null } | null = null;
+  if (resumeId) {
+    const { data } = await supabase.from("resumes").select("id, name, focus_area").eq("id", resumeId).single();
+    resume = data ?? null;
+  }
+
+  const domain = domainFromUrl(job.url) ?? guessDomain(job.company);
+  const hunterResult = await findContactsForDomain(domain);
+  if (hunterResult.error) {
+    await logError(supabase, "jobs/draft-outreach", `hunter: ${hunterResult.error}`, { jobId: id, domain });
+  }
+  const contact = pickBestContact(hunterResult.contacts);
+
+  let draft: z.infer<typeof DraftSchema>;
+  try {
+    draft = await generateContent(buildPrompt(job, resume, contact?.firstName ?? null), DraftSchema);
+  } catch (error) {
+    await logError(supabase, "jobs/draft-outreach", error instanceof Error ? error.message : String(error), { jobId: id });
+    const message =
+      error instanceof GenerateContentError
+        ? "The AI didn't return a usable draft — try again."
+        : "Something went wrong drafting the email — try again.";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
+
+  const { data: outreach, error: insertError } = await supabase
+    .from("outreach")
+    .insert({
+      job_posting_id: id,
+      contact_email: contact?.email ?? null,
+      contact_name: contact ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") || null : null,
+      resume_id: resume?.id ?? null,
+      email_subject: draft.subject,
+      email_body_draft: draft.body,
+      status: "draft",
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ outreach, contactFound: contact !== null }, { status: 201 });
+}

@@ -11,6 +11,7 @@ import {
   Images,
   FileText,
   Landmark,
+  Send,
   type LucideIcon,
 } from "lucide-react";
 
@@ -70,5 +71,15 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Documents", href: "/masters-abroad/documents", icon: FileText },
     ],
   },
-  { label: "Jobs", href: "/jobs", icon: Briefcase },
+  {
+    label: "Jobs",
+    href: "/jobs",
+    icon: Briefcase,
+    children: [
+      { label: "Feed", href: "/jobs", icon: Briefcase },
+      { label: "Outreach Queue", href: "/jobs/outreach-queue", icon: Send },
+      { label: "Pipeline", href: "/jobs/pipeline", icon: ListChecks },
+      { label: "Resumes", href: "/jobs/resumes", icon: FileText },
+    ],
+  },
 ];
