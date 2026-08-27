@@ -9,17 +9,20 @@ export type OutreachRow = {
   email_body_draft: string | null;
   email_body_final: string | null;
   job_posting_id: string | null;
+  resume_id: string | null;
 };
 
 export type SendOutreachResult = { success: true } | { success: false; error: string };
 
+const RESUME_BUCKET = "documents";
+const SIGNED_URL_TTL_SECONDS = 3600;
+
 /**
  * Shared by the immediate "send now" route and the paced cron — sends via
- * Resend, marks the row sent, and rolls the job into the applications
- * pipeline. Returns the real Resend error on failure (e.g. the sandbox
- * sender's "verify a domain to send to other recipients" restriction)
- * rather than swallowing it, since a silent failure here is exactly what
- * left outreach looking "sent" when nothing went out.
+ * SMTP, marks the row sent, and rolls the job into the applications
+ * pipeline. Returns the real SMTP error on failure rather than swallowing
+ * it, since a silent failure here is exactly what left outreach looking
+ * "sent" when nothing went out.
  */
 export async function sendOutreachEmail(
   supabase: SupabaseClient,
@@ -30,10 +33,29 @@ export async function sendOutreachEmail(
   const body = outreach.email_body_final ?? outreach.email_body_draft;
   if (!body || !outreach.email_subject) return { success: false, error: "Missing subject/body" };
 
+  let attachments: { filename: string; path: string }[] | undefined;
+  if (outreach.resume_id) {
+    const { data: resume } = await supabase
+      .from("resumes")
+      .select("name, file_url")
+      .eq("id", outreach.resume_id)
+      .single();
+    if (resume) {
+      const { data: signed } = await supabase.storage
+        .from(RESUME_BUCKET)
+        .createSignedUrl(resume.file_url, SIGNED_URL_TTL_SECONDS);
+      if (signed?.signedUrl) {
+        attachments = [{ filename: resume.name, path: signed.signedUrl }];
+      }
+    }
+  }
+
   const result = await sendEmail({
     to: outreach.contact_email,
     subject: outreach.email_subject,
     html: body.replace(/\n/g, "<br />"),
+    text: body,
+    attachments,
   });
   if (!result.success) return { success: false, error: result.error };
 

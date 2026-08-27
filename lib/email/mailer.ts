@@ -29,7 +29,15 @@ function getTransporter(): Transporter {
 
 export type SendEmailResult = { success: true } | { success: false; error: string };
 
-export async function sendEmail(params: { to: string; subject: string; html: string }): Promise<SendEmailResult> {
+export type EmailAttachment = { filename: string; path: string };
+
+export async function sendEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  attachments?: EmailAttachment[];
+}): Promise<SendEmailResult> {
   const from = process.env.EMAIL_FROM;
   if (!from || !process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     return { success: false, error: "SMTP_HOST/SMTP_USER/SMTP_PASS/EMAIL_FROM not configured" };
@@ -41,6 +49,8 @@ export async function sendEmail(params: { to: string; subject: string; html: str
       to: params.to,
       subject: params.subject,
       html: params.html,
+      text: params.text,
+      attachments: params.attachments,
     });
     return { success: true };
   } catch (error) {

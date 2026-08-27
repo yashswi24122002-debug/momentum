@@ -24,8 +24,10 @@ function buildPrompt(
 ): string {
   return `Write a short, genuine cold-outreach email from me to ${contactFirstName ? `${contactFirstName}, a` : "a"} recruiter/hiring contact at ${job.company}, about their "${job.role_title}" role${job.location ? ` (${job.location})` : ""}.
 
-Tone: direct, confident, not desperate, not overly formal. 3-4 short paragraphs max. Mention 1-2 concrete technical skills that plausibly match the role (infer from the role title/description below — don't invent skills that don't fit). End with a clear, low-friction ask (a quick call, or just "happy to share more").${
-    resume ? `\n\nMy resume on file is focused on: ${resume.focus_area ?? resume.name}.` : ""
+Tone: direct, confident, not desperate, not overly formal. 3-4 short paragraphs max. Mention 1-2 concrete technical skills that plausibly match the role (infer from the role title/description below — don't invent skills that don't fit). End with a clear, low-friction ask (a quick call, or just "happy to share more"). Avoid generic mass-cold-email phrasing that trips spam filters (e.g. heavy use of "quick call", exclamation points, all-caps words, or a hard sales pitch tone) — keep it reading like a real one-to-one email.${
+    resume
+      ? `\n\nMy resume (focused on: ${resume.focus_area ?? resume.name}) will genuinely be attached to this email as a file — you may say something like "I've attached my resume" once, but never state or invent a filename.`
+      : `\n\nNo resume will be attached to this email — do not mention an attachment, an attached resume, or an attached file anywhere in the email.`
   }
 
 Greeting: ${contactFirstName ? `open with "Hi ${contactFirstName},"` : `I don't know the recipient's name — open with "Hi there," and never use a bracketed placeholder like [Name].`}

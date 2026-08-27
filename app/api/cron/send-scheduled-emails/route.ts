@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
   const { data: due, error: dueError } = await supabase
     .from("outreach")
-    .select("id, contact_email, email_subject, email_body_draft, email_body_final, job_posting_id")
+    .select("id, contact_email, email_subject, email_body_draft, email_body_final, job_posting_id, resume_id")
     .in("status", ["approved", "scheduled"])
     .or(`scheduled_send_at.is.null,scheduled_send_at.lte.${nowIso}`)
     .order("scheduled_send_at", { ascending: true, nullsFirst: true })
