@@ -1,4 +1,4 @@
-import { ExternalLink, MapPin, Trash2, Send, CalendarDays } from "lucide-react";
+import { ExternalLink, MapPin, Trash2, Send, CalendarDays, UserSearch } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -10,12 +10,14 @@ export function JobCard({
   onMarkReviewed,
   onDismiss,
   onDelete,
+  onCheckContact,
   onDraftOutreach,
 }: {
   job: JobPosting;
   onMarkReviewed?: () => void;
   onDismiss?: () => void;
   onDelete: () => void;
+  onCheckContact: () => void;
   onDraftOutreach: () => void;
 }) {
   return (
@@ -85,6 +87,10 @@ export function JobCard({
               Dismiss
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={onCheckContact}>
+            <UserSearch className="size-3.5" />
+            Check contact
+          </Button>
           <Button size="sm" onClick={onDraftOutreach}>
             <Send className="size-3.5" />
             Draft outreach

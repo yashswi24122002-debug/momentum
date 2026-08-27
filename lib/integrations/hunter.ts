@@ -1,7 +1,15 @@
-export type HunterContact = { email: string; firstName: string | null; lastName: string | null; position: string | null };
+export type HunterContact = {
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  position: string | null;
+  linkedin: string | null;
+  phoneNumber: string | null;
+  verificationStatus: string | null;
+};
 export type HunterResult = { contacts: HunterContact[]; error?: string };
 
-/** Hunter.io domain-search — finds likely contact emails for a company's domain. */
+/** Hunter.io domain-search — finds every publicly-discoverable contact at a domain, any role, not just HR/recruiting. */
 export async function findContactsForDomain(domain: string): Promise<HunterResult> {
   const apiKey = process.env.HUNTER_API_KEY;
   if (!apiKey) return { contacts: [], error: "HUNTER_API_KEY not configured" };
@@ -19,6 +27,9 @@ export async function findContactsForDomain(domain: string): Promise<HunterResul
       firstName: (e.first_name as string) ?? null,
       lastName: (e.last_name as string) ?? null,
       position: (e.position as string) ?? null,
+      linkedin: (e.linkedin as string) ?? null,
+      phoneNumber: (e.phone_number as string) ?? null,
+      verificationStatus: (e.verification as { status?: string } | undefined)?.status ?? null,
     }));
 
     return { contacts };
@@ -30,4 +41,14 @@ export async function findContactsForDomain(domain: string): Promise<HunterResul
 /** Best-effort company-name → domain guess, used when a job posting has no URL to derive a domain from. */
 export function guessDomain(company: string): string {
   return `${company.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`;
+}
+
+/** Extracts a bare hostname from a job posting URL, for passing to findContactsForDomain. */
+export function domainFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }

@@ -15,12 +15,14 @@ export function DraftOutreachDialog({
   onConfirm,
   drafting,
   jobTitle,
+  preselectedContactName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (resumeId: string | null) => void;
   drafting: boolean;
   jobTitle: string;
+  preselectedContactName?: string | null;
 }) {
   const [resumes, setResumes] = useState<ResumeWithUrl[]>([]);
   const [resumeId, setResumeId] = useState<string>(NO_RESUME);
@@ -41,7 +43,9 @@ export function DraftOutreachDialog({
         <DialogHeader>
           <DialogTitle>Draft outreach — {jobTitle}</DialogTitle>
           <DialogDescription>
-            Looks up a likely contact via Hunter.io and drafts an email with Gemini. You&apos;ll review before sending.
+            {preselectedContactName
+              ? `Drafting to ${preselectedContactName}. You'll review before sending.`
+              : "Looks up a likely contact via Hunter.io and drafts an email with Gemini. You'll review before sending."}
           </DialogDescription>
         </DialogHeader>
 

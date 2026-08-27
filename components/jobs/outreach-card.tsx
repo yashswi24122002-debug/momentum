@@ -14,17 +14,18 @@ type OutreachWithJob = Outreach & { job_postings: { company: string; role_title:
 
 export function OutreachCard({
   outreach,
-  onApprove,
+  onSend,
   onSaveEdits,
 }: {
   outreach: OutreachWithJob;
-  onApprove: () => void;
-  onSaveEdits: (fields: { email_subject: string; email_body_final: string; contact_email: string }) => void;
+  onSend: () => Promise<void>;
+  onSaveEdits: (fields: { email_subject: string; email_body_final: string; contact_email: string }) => Promise<void>;
 }) {
   const [subject, setSubject] = useState(outreach.email_subject ?? "");
   const [body, setBody] = useState(outreach.email_body_final ?? outreach.email_body_draft ?? "");
   const [contactEmail, setContactEmail] = useState(outreach.contact_email ?? "");
   const [dirty, setDirty] = useState(false);
+  const [sending, setSending] = useState(false);
 
   function markDirty() {
     if (!dirty) setDirty(true);
@@ -98,8 +99,8 @@ export function OutreachCard({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                onSaveEdits({ email_subject: subject, email_body_final: body, contact_email: contactEmail });
+              onClick={async () => {
+                await onSaveEdits({ email_subject: subject, email_body_final: body, contact_email: contactEmail });
                 setDirty(false);
               }}
             >
@@ -108,13 +109,18 @@ export function OutreachCard({
           )}
           <Button
             size="sm"
-            disabled={!contactEmail}
-            onClick={() => {
-              if (dirty) onSaveEdits({ email_subject: subject, email_body_final: body, contact_email: contactEmail });
-              onApprove();
+            disabled={!contactEmail || sending}
+            onClick={async () => {
+              setSending(true);
+              if (dirty) {
+                await onSaveEdits({ email_subject: subject, email_body_final: body, contact_email: contactEmail });
+                setDirty(false);
+              }
+              await onSend();
+              setSending(false);
             }}
           >
-            Approve to send
+            {sending ? "Sending…" : "Send now"}
           </Button>
         </div>
       )}

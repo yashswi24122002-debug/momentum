@@ -2,19 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
-import { findContactsForDomain, guessDomain, type HunterContact } from "@/lib/integrations/hunter";
+import { findContactsForDomain, guessDomain, domainFromUrl, type HunterContact } from "@/lib/integrations/hunter";
 import { logError } from "@/lib/errors/log-error";
 
 const RECRUITING_HINTS = ["recruit", "talent", "hr", "people", "hiring"];
-
-function domainFromUrl(url: string | null): string | null {
-  if (!url) return null;
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
 
 function pickBestContact(contacts: HunterContact[]) {
   const recruiting = contacts.find((c) => RECRUITING_HINTS.some((h) => c.position?.toLowerCase().includes(h)));
@@ -53,6 +44,11 @@ export async function POST(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const resumeId = typeof body.resume_id === "string" ? body.resume_id : null;
+  // Set when the user picked a specific person from the "Check contact"
+  // list — skips the auto Hunter.io lookup/pick entirely.
+  const overrideEmail = typeof body.contact_email === "string" && body.contact_email.trim() ? body.contact_email.trim() : null;
+  const overrideFirstName = typeof body.contact_first_name === "string" ? body.contact_first_name.trim() || null : null;
+  const overrideLastName = typeof body.contact_last_name === "string" ? body.contact_last_name.trim() || null : null;
 
   const { data: job, error: jobError } = await supabase.from("job_postings").select("*").eq("id", id).single();
   if (jobError || !job) {
@@ -65,12 +61,18 @@ export async function POST(
     resume = data ?? null;
   }
 
-  const domain = domainFromUrl(job.url) ?? guessDomain(job.company);
-  const hunterResult = await findContactsForDomain(domain);
-  if (hunterResult.error) {
-    await logError(supabase, "jobs/draft-outreach", `hunter: ${hunterResult.error}`, { jobId: id, domain });
+  let contact: HunterContact | null = overrideEmail
+    ? { email: overrideEmail, firstName: overrideFirstName, lastName: overrideLastName, position: null, linkedin: null, phoneNumber: null, verificationStatus: null }
+    : null;
+
+  if (!contact) {
+    const domain = domainFromUrl(job.url) ?? guessDomain(job.company);
+    const hunterResult = await findContactsForDomain(domain);
+    if (hunterResult.error) {
+      await logError(supabase, "jobs/draft-outreach", `hunter: ${hunterResult.error}`, { jobId: id, domain });
+    }
+    contact = pickBestContact(hunterResult.contacts);
   }
-  const contact = pickBestContact(hunterResult.contacts);
 
   let draft: z.infer<typeof DraftSchema>;
   try {

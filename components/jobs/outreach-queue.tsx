@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { OutreachCard } from "@/components/jobs/outreach-card";
 import { OUTREACH_STATUS_ORDER, OUTREACH_STATUS_LABELS } from "@/lib/jobs/ui";
-import type { Outreach, OutreachStatus } from "@/lib/types/jobs";
+import type { Outreach } from "@/lib/types/jobs";
 
 type OutreachWithJob = Outreach & { job_postings: { company: string; role_title: string; url: string | null } | null };
 
@@ -37,6 +37,18 @@ export function OutreachQueue() {
     }
     const { outreach: updated } = await res.json();
     setOutreach((prev) => prev?.map((o) => (o.id === id ? { ...o, ...updated } : o)) ?? null);
+  }
+
+  async function sendOutreach(id: string) {
+    const res = await fetch(`/api/outreach/${id}/send`, { method: "POST" });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "Couldn't send that email — try again." }));
+      toast.error(error, { duration: 10000 });
+      return;
+    }
+    const { outreach: updated } = await res.json();
+    setOutreach((prev) => prev?.map((o) => (o.id === id ? { ...o, ...updated } : o)) ?? null);
+    toast.success("Sent.");
   }
 
   if (outreach === null) {
@@ -78,7 +90,7 @@ export function OutreachQueue() {
                     <OutreachCard
                       key={o.id}
                       outreach={o}
-                      onApprove={() => patchOutreach(o.id, { status: "approved" as OutreachStatus })}
+                      onSend={() => sendOutreach(o.id)}
                       onSaveEdits={(fields) => patchOutreach(o.id, fields)}
                     />
                   ))}
