@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { IdeaCard } from "@/components/ideas/idea-card";
 import { RejectDialog } from "@/components/ideas/reject-dialog";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { PipelineBoard, type ReportWithIdea } from "@/components/ideas/pipeline-board";
 import { WeeklyDigestCard } from "@/components/ideas/weekly-digest";
 import { computeWeeklyDigest } from "@/lib/ideas/digest";
@@ -21,6 +22,8 @@ export function IdeasPage() {
   const [generating, setGenerating] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Idea | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Idea | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const today = todayLocalISODate();
 
   async function loadAll() {
@@ -95,6 +98,21 @@ export function IdeasPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const res = await fetch(`/api/ideas/${deleteTarget.id}`, { method: "DELETE" });
+    setDeleting(false);
+    if (!res.ok) {
+      toast.error("Couldn't delete that — try again.");
+      return;
+    }
+    setAllIdeas((prev) => prev?.filter((i) => i.id !== deleteTarget.id) ?? null);
+    setReports((prev) => prev?.filter((r) => r.idea_id !== deleteTarget.id) ?? null);
+    setDeleteTarget(null);
+    toast.success("Deleted.");
+  }
+
   if (allIdeas === null || reports === null) {
     return (
       <div className="space-y-4">
@@ -140,6 +158,7 @@ export function IdeasPage() {
                 onApprove={() => handleApprove(idea)}
                 onReject={() => setRejectTarget(idea)}
                 onToggleSave={() => handleToggleSave(idea)}
+                onDelete={() => setDeleteTarget(idea)}
               />
             ))
           )}
@@ -156,6 +175,15 @@ export function IdeasPage() {
         open={rejectTarget !== null}
         onOpenChange={(open) => !open && setRejectTarget(null)}
         onConfirm={handleReject}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        deleting={deleting}
+        title={`Delete "${deleteTarget?.title}"?`}
+        description="This permanently deletes the idea and its report (if approved). This can't be undone."
       />
     </div>
   );

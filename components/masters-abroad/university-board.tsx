@@ -12,6 +12,7 @@ import { UniversityCard } from "@/components/masters-abroad/university-card";
 import { DiscoveryDialog } from "@/components/masters-abroad/discovery-dialog";
 import { ComparisonDialog } from "@/components/masters-abroad/comparison-dialog";
 import { DeadlineHints } from "@/components/masters-abroad/deadline-hints";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { UNIVERSITY_STATUS_ORDER, UNIVERSITY_STATUS_LABELS } from "@/lib/masters-abroad/ui";
 import type { University, UniversityStatus, DiscoveryProfile } from "@/lib/types/masters-abroad";
 
@@ -23,6 +24,8 @@ export function UniversityBoard() {
   const [discovering, setDiscovering] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<University | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -83,6 +86,21 @@ export function UniversityBoard() {
     });
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const res = await fetch(`/api/universities/${deleteTarget.id}`, { method: "DELETE" });
+    setDeleting(false);
+    if (!res.ok) {
+      toast.error("Couldn't delete that — try again.");
+      return;
+    }
+    setUniversities((prev) => prev?.filter((u) => u.id !== deleteTarget.id) ?? null);
+    setSelectedIds((prev) => prev.filter((id) => id !== deleteTarget.id));
+    setDeleteTarget(null);
+    toast.success("Deleted.");
+  }
+
   if (universities === null) {
     return (
       <div className="space-y-4">
@@ -134,6 +152,7 @@ export function UniversityBoard() {
                       university={u}
                       onStatusChange={(s) => handleStatusChange(u.id, s)}
                       onToggleVerified={() => handleToggleVerified(u.id, !u.verified)}
+                      onDelete={() => setDeleteTarget(u)}
                       selected={selectedIds.includes(u.id)}
                       onToggleSelected={() => toggleSelected(u.id)}
                       selectionDisabled={selectedIds.length >= MAX_COMPARE}
@@ -157,6 +176,15 @@ export function UniversityBoard() {
 
       <DiscoveryDialog open={dialogOpen} onOpenChange={setDialogOpen} onDiscover={handleDiscover} discovering={discovering} />
       <ComparisonDialog universities={selectedUniversities} open={compareOpen} onOpenChange={setCompareOpen} />
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        deleting={deleting}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This also deletes any tasks scoped specifically to this university. This can't be undone."
+      />
     </div>
   );
 }

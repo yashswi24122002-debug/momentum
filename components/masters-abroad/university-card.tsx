@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
+import { Sparkles, ShieldCheck, ShieldAlert, ExternalLink, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ export function UniversityCard({
   university,
   onStatusChange,
   onToggleVerified,
+  onDelete,
   selected,
   onToggleSelected,
   selectionDisabled,
@@ -26,6 +27,7 @@ export function UniversityCard({
   university: University;
   onStatusChange: (status: UniversityStatus) => void;
   onToggleVerified: () => void;
+  onDelete?: () => void;
   selected?: boolean;
   onToggleSelected?: () => void;
   selectionDisabled?: boolean;
@@ -50,12 +52,26 @@ export function UniversityCard({
             {university.program_name && <p className="text-xs text-text-secondary">{university.program_name}</p>}
           </div>
         </div>
-        {university.source === "ai_suggested" && (
-          <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent-muted-bg px-2 py-0.5 text-[10px] text-primary">
-            <Sparkles className="size-3" />
-            AI suggested
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {university.source === "ai_suggested" && (
+            <span className="flex items-center gap-1 rounded-full bg-accent-muted-bg px-2 py-0.5 text-[10px] text-primary">
+              <Sparkles className="size-3" />
+              AI suggested
+            </span>
+          )}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-text-muted hover:bg-danger/10 hover:text-danger"
+              onClick={onDelete}
+              aria-label="Delete"
+              title="Delete permanently"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {university.city && <p className="text-xs text-text-muted">{university.city}</p>}

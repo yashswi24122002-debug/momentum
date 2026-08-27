@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ContentIdeaCard } from "@/components/content/content-idea-card";
 import { RejectDialog } from "@/components/content/reject-dialog";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { GenerateDialog, type GenerateContext } from "@/components/content/generate-dialog";
 import { PipelineBoard, type ReportWithIdea } from "@/components/content/pipeline-board";
 import { todayLocalISODate } from "@/lib/date";
@@ -21,6 +22,8 @@ export function ContentPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<ContentIdea | null>(null);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ContentIdea | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const today = todayLocalISODate();
 
   async function loadAll() {
@@ -88,6 +91,21 @@ export function ContentPage() {
     );
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const res = await fetch(`/api/content/${deleteTarget.id}`, { method: "DELETE" });
+    setDeleting(false);
+    if (!res.ok) {
+      toast.error("Couldn't delete that — try again.");
+      return;
+    }
+    setAllIdeas((prev) => prev?.filter((i) => i.id !== deleteTarget.id) ?? null);
+    setReports((prev) => prev?.filter((r) => r.content_idea_id !== deleteTarget.id) ?? null);
+    setDeleteTarget(null);
+    toast.success("Deleted.");
+  }
+
   if (allIdeas === null || reports === null) {
     return (
       <div className="space-y-4">
@@ -133,6 +151,7 @@ export function ContentPage() {
               approving={approvingId === idea.id}
               onApprove={() => handleApprove(idea)}
               onReject={() => setRejectTarget(idea)}
+              onDelete={() => setDeleteTarget(idea)}
             />
           ))
         )}
@@ -154,6 +173,15 @@ export function ContentPage() {
         onOpenChange={setGenerateDialogOpen}
         onGenerate={handleGenerate}
         generating={generating}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        deleting={deleting}
+        title={`Delete "${deleteTarget?.title}"?`}
+        description="This permanently deletes the idea and its report (if approved). This can't be undone."
       />
     </div>
   );

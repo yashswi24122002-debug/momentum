@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { IdeaCard } from "@/components/ideas/idea-card";
 import { RejectDialog } from "@/components/ideas/reject-dialog";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import type { StatusTone } from "@/components/shared/status-badge";
 import type { Idea, RejectionReason } from "@/lib/types/ideas";
 
@@ -33,6 +34,8 @@ export function IdeaHistory() {
   const [tab, setTab] = useState<FilterTab>("all");
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Idea | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Idea | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -84,6 +87,20 @@ export function IdeaHistory() {
       setIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, saved: idea.saved } : i)) ?? null);
       toast.error("Couldn't save that — try again.");
     }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const res = await fetch(`/api/ideas/${deleteTarget.id}`, { method: "DELETE" });
+    setDeleting(false);
+    if (!res.ok) {
+      toast.error("Couldn't delete that — try again.");
+      return;
+    }
+    setIdeas((prev) => prev?.filter((i) => i.id !== deleteTarget.id) ?? null);
+    setDeleteTarget(null);
+    toast.success("Deleted.");
   }
 
   if (ideas === null) {
@@ -143,6 +160,7 @@ export function IdeaHistory() {
                 onApprove={idea.status === "pending" ? () => handleApprove(idea) : undefined}
                 onReject={idea.status === "pending" ? () => setRejectTarget(idea) : undefined}
                 onToggleSave={() => handleToggleSave(idea)}
+                onDelete={() => setDeleteTarget(idea)}
               />
               {idea.status === "approved" && (
                 <Link href={`/ideas/${idea.id}`} className="block px-1 text-xs text-primary hover:underline">
@@ -158,6 +176,15 @@ export function IdeaHistory() {
         open={rejectTarget !== null}
         onOpenChange={(open) => !open && setRejectTarget(null)}
         onConfirm={handleReject}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        deleting={deleting}
+        title={`Delete "${deleteTarget?.title}"?`}
+        description="This permanently deletes the idea and its report (if approved). This can't be undone."
       />
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X, Loader2, Info, Star } from "lucide-react";
+import { Check, X, Loader2, Info, Star, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ export function IdeaCard({
   onApprove,
   onReject,
   onToggleSave,
+  onDelete,
   approving,
   statusBadge,
 }: {
@@ -21,6 +22,7 @@ export function IdeaCard({
   onApprove?: () => void;
   onReject?: () => void;
   onToggleSave: () => void;
+  onDelete?: () => void;
   approving?: boolean;
   statusBadge?: { label: string; tone: StatusTone };
 }) {
@@ -38,6 +40,18 @@ export function IdeaCard({
           {statusBadge && <StatusBadge label={statusBadge.label} tone={statusBadge.tone} />}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-text-muted hover:bg-danger/10 hover:text-danger"
+              onClick={onDelete}
+              aria-label="Delete"
+              title="Delete permanently"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"

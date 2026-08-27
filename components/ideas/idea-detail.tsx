@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Info, Download } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Info, Download, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LIFECYCLE_ORDER, LIFECYCLE_LABELS, parseSignalSource } from "@/lib/ideas/ui";
 import { exportIdeaReportPdf } from "@/lib/ideas/export-pdf";
 import type { Idea, IdeaReport, IdeaLifecycleStatus } from "@/lib/types/ideas";
@@ -25,7 +27,10 @@ const REPORT_FIELDS: { key: keyof IdeaReport; label: string }[] = [
 ];
 
 export function IdeaDetail({ ideaId }: { ideaId: string }) {
+  const router = useRouter();
   const [idea, setIdea] = useState<IdeaWithReports | null | undefined>(undefined);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetch(`/api/ideas/${ideaId}`)
@@ -49,6 +54,18 @@ export function IdeaDetail({ ideaId }: { ideaId: string }) {
     }
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    const res = await fetch(`/api/ideas/${ideaId}`, { method: "DELETE" });
+    setDeleting(false);
+    if (!res.ok) {
+      toast.error("Couldn't delete that — try again.");
+      return;
+    }
+    toast.success("Deleted.");
+    router.push("/ideas");
+  }
+
   if (idea === undefined) {
     return (
       <div className="space-y-4">
@@ -70,7 +87,16 @@ export function IdeaDetail({ ideaId }: { ideaId: string }) {
         <Button variant="ghost" size="icon" render={<Link href="/ideas" />} nativeButton={false}>
           <ArrowLeft className="size-4" />
         </Button>
-        <h1 className="text-xl font-semibold text-text-primary">{idea.title}</h1>
+        <h1 className="flex-1 text-xl font-semibold text-text-primary">{idea.title}</h1>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-text-muted hover:bg-danger/10 hover:text-danger"
+          onClick={() => setDeleteOpen(true)}
+          aria-label="Delete"
+        >
+          <Trash2 className="size-4" />
+        </Button>
       </div>
 
       <Card className="border-border bg-surface">
@@ -157,6 +183,15 @@ export function IdeaDetail({ ideaId }: { ideaId: string }) {
           </div>
         </>
       )}
+
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={handleDelete}
+        deleting={deleting}
+        title={`Delete "${idea.title}"?`}
+        description="This permanently deletes the idea and its report. This can't be undone."
+      />
     </div>
   );
 }

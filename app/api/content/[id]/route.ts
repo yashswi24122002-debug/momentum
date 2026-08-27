@@ -37,3 +37,22 @@ export async function GET(
 
   return NextResponse.json({ content_idea: { ...data, matched_media: mediaWithUrls } });
 }
+
+// Hard delete — cascades to content_reports via its FK. Doesn't touch the
+// matched media itself, only the idea's reference to it.
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { supabase, unauthorized } = await requireUser();
+  if (unauthorized) return unauthorized;
+
+  const { id } = await params;
+  const { error } = await supabase.from("content_ideas").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}

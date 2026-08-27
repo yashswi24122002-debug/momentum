@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X, Loader2, Film, Images, ExternalLink } from "lucide-react";
+import { Check, X, Loader2, Film, Images, ExternalLink, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
@@ -20,12 +20,14 @@ export function ContentIdeaCard({
   idea,
   onApprove,
   onReject,
+  onDelete,
   approving,
   statusBadge,
 }: {
   idea: ContentIdea;
   onApprove?: () => void;
   onReject?: () => void;
+  onDelete?: () => void;
   approving?: boolean;
   statusBadge?: { label: string; tone: StatusTone };
 }) {
@@ -40,6 +42,18 @@ export function ContentIdeaCard({
           {statusBadge && <StatusBadge label={statusBadge.label} tone={statusBadge.tone} />}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-text-muted hover:bg-danger/10 hover:text-danger"
+              onClick={onDelete}
+              aria-label="Delete"
+              title="Delete permanently"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          )}
           {onReject && (
             <Button
               variant="ghost"
