@@ -1,4 +1,4 @@
-import { ExternalLink, MapPin, Trash2, Send } from "lucide-react";
+import { ExternalLink, MapPin, Trash2, Send, CalendarDays } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -48,6 +48,12 @@ export function JobCard({
         )}
         {job.remote && <span className="rounded-full bg-accent-muted-bg px-2 py-0.5 text-primary">Remote</span>}
         <span className="capitalize">{job.source}</span>
+        {job.posted_date && (
+          <span className="flex items-center gap-1">
+            <CalendarDays className="size-3" />
+            Posted {job.posted_date}
+          </span>
+        )}
       </div>
 
       {job.fit_score !== null && (

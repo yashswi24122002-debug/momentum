@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/send-scheduled-emails",
-      "schedule": "15 4-12 * * 1-5"
+      "schedule": "15 4 * * 1-5"
     }
   ]
 }

@@ -4,12 +4,22 @@ import { sendEmail } from "@/lib/email/resend";
 import { logError } from "@/lib/errors/log-error";
 import { addDays, todayLocalISODate } from "@/lib/date";
 
-// Pacing (Master PRD: "send a few outreach emails per hour during work
-// hours, not all at once") comes from running this hourly (see vercel.json)
-// and only ever sending BATCH_SIZE per run — no separate scheduling
-// algorithm needed. An outreach row becomes eligible the moment it's
-// "approved" (send now) or "scheduled" with a past-due scheduled_send_at.
-const BATCH_SIZE = 3;
+// Master PRD: "send a few outreach emails per hour during work hours, not
+// all at once." Vercel Hobby only allows daily crons (confirmed live — an
+// hourly schedule was rejected in production), so true hour-by-hour pacing
+// isn't available on this plan. This runs once/weekday morning instead and
+// staggers sends within that single run (SEND_DELAY_MS apart) so it isn't a
+// single burst — upgrade to Pro and add back an hourly vercel.json schedule
+// for real inter-hour pacing. An outreach row becomes eligible the moment
+// it's "approved" (send now) or "scheduled" with a past-due scheduled_send_at.
+const BATCH_SIZE = 10;
+const SEND_DELAY_MS = 3000;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -35,6 +45,8 @@ export async function GET(request: NextRequest) {
 
   let sent = 0;
   for (const outreach of due ?? []) {
+    if (sent > 0) await sleep(SEND_DELAY_MS);
+
     if (!outreach.contact_email) {
       await logError(supabase, "cron/send-scheduled-emails", "Skipped — no contact email on file", { outreachId: outreach.id });
       continue;
