@@ -38,14 +38,26 @@ export const LEVER_COMPANIES = ["palantir"];
 // location (Noida). Change to your target market.
 export const ADZUNA_COUNTRY = "in";
 
+// Software engineering roles only — general SWE/SDE, frontend, backend,
+// full-stack/MERN, plus technical PM and forward-deployed engineer.
+// Non-matching roles (sales, marketing, etc.) are hard-filtered out by
+// computeFitScore, not just soft-ranked, so keep this list to titles that
+// are actually a fit.
 export const ROLE_KEYWORDS = [
   "software engineer",
+  "software developer",
+  "sde",
   "full stack",
   "fullstack",
+  "mern",
   "backend",
+  "back end",
   "frontend",
-  "swe",
+  "front end",
   "web developer",
+  "technical product manager",
+  "forward deployed engineer",
+  "fde",
 ];
 
 // Used for both aggregation search terms and fit-score matching —

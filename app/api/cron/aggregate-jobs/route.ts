@@ -16,6 +16,11 @@ function dedupeKey(company: string, roleTitle: string, source: string): string {
   return `${source}::${company.trim().toLowerCase()}::${roleTitle.trim().toLowerCase()}`;
 }
 
+// Sequential per-keyword fetches across 3 sources add up fast now that
+// ROLE_KEYWORDS covers 14 terms — give this room on Vercel before it hits
+// the default function timeout.
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -53,9 +58,15 @@ export async function GET(request: NextRequest) {
     (existing ?? []).map((j) => dedupeKey(j.company, j.role_title, j.source))
   );
 
+  let skippedNonEngineering = 0;
   const toInsert = [];
   for (const result of results as JobSourceResult[]) {
     for (const job of result.postings) {
+      const fitScore = computeFitScore(job);
+      if (fitScore === 0) {
+        skippedNonEngineering++;
+        continue;
+      }
       const key = dedupeKey(job.company, job.role_title, job.source);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -69,7 +80,7 @@ export async function GET(request: NextRequest) {
         description_raw: job.description_raw,
         tech_stack_tags: job.tech_stack_tags,
         posted_date: job.posted_date,
-        fit_score: computeFitScore(job),
+        fit_score: fitScore,
         status: "new" as const,
       });
     }
@@ -86,6 +97,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     fetched: (results as JobSourceResult[]).reduce((sum, r) => sum + r.postings.length, 0),
     inserted: toInsert.length,
+    skippedNonEngineering,
     sourceErrors: (results as JobSourceResult[]).filter((r) => r.error).map((r) => r.source),
   });
 }

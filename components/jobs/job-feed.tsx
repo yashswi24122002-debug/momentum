@@ -13,9 +13,19 @@ import { DraftOutreachDialog } from "@/components/jobs/draft-outreach-dialog";
 import { JOB_STATUS_ORDER, JOB_STATUS_LABELS } from "@/lib/jobs/ui";
 import type { JobPosting, JobPostingStatus } from "@/lib/types/jobs";
 
+// Every inserted posting already passed the role-title gate in
+// computeFitScore (see lib/jobs/fit-score.ts), so scores start at 40 —
+// these options rank by tech-stack overlap within that matched set.
+const FIT_SCORE_OPTIONS = [
+  { label: "All", value: 0 },
+  { label: "60+", value: 60 },
+  { label: "80+", value: 80 },
+];
+
 export function JobFeed() {
   const [jobs, setJobs] = useState<JobPosting[] | null>(null);
   const [filter, setFilter] = useState<JobPostingStatus>("new");
+  const [minFitScore, setMinFitScore] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<JobPosting | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [draftTarget, setDraftTarget] = useState<JobPosting | null>(null);
@@ -23,12 +33,13 @@ export function JobFeed() {
 
   useEffect(() => {
     async function load() {
-      const res = await fetch("/api/jobs");
+      setJobs(null);
+      const res = await fetch(`/api/jobs?minFitScore=${minFitScore}`);
       const json = await res.json();
       setJobs(json.jobs ?? []);
     }
     load();
-  }, []);
+  }, [minFitScore]);
 
   async function handleStatusChange(id: string, status: JobPostingStatus) {
     setJobs((prev) => prev?.map((j) => (j.id === id ? { ...j, status } : j)) ?? null);
@@ -104,17 +115,32 @@ export function JobFeed() {
         </div>
       </div>
 
-      <div className="flex gap-2">
-        {JOB_STATUS_ORDER.map((status) => (
-          <Button
-            key={status}
-            variant={filter === status ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilter(status)}
-          >
-            {JOB_STATUS_LABELS[status]} ({jobs.filter((j) => j.status === status).length})
-          </Button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2">
+          {JOB_STATUS_ORDER.map((status) => (
+            <Button
+              key={status}
+              variant={filter === status ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilter(status)}
+            >
+              {JOB_STATUS_LABELS[status]} ({jobs.filter((j) => j.status === status).length})
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-text-muted">Min fit</span>
+          {FIT_SCORE_OPTIONS.map((opt) => (
+            <Button
+              key={opt.value}
+              variant={minFitScore === opt.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMinFitScore(opt.value)}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
