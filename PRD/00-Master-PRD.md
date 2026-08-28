@@ -1,14 +1,14 @@
 # Momentum — Master PRD
 
 **Owner:** Solo project (single user)
-**Purpose:** A personal command center consolidating five tools that support career growth, further education planning, job search, habit consistency, and personal content creation.
+**Purpose:** A personal command center consolidating six tools that support career growth, further education planning, job search, habit consistency, personal content creation, and nutrition awareness.
 **Repo type:** Single Next.js monorepo (frontend + backend API routes in one deployable unit)
 
 ---
 
 ## 1. Product Overview
 
-Momentum is a private, single-user web application (installable as a PWA on mobile) consisting of five independent but co-located tools:
+Momentum is a private, single-user web application (installable as a PWA on mobile) consisting of six independent but co-located tools:
 
 | # | Tool | Core Function | Automation Level |
 |---|------|---------------|-------------------|
@@ -17,8 +17,9 @@ Momentum is a private, single-user web application (installable as a PWA on mobi
 | 3 | **Jobs Automation** | Aggregates tech job postings from compliant sources, AI-drafted personalized cold emails (human-reviewed), application pipeline tracker | Scheduled aggregation + manual-reviewed sending |
 | 4 | **Habit Tracker** | Daily boolean habit checklist, CRUD, dashboards, streaks, insights | Pure CRUD, no AI |
 | 5 | **Content Creation** | Scrapes travel-content trend signals, cross-references your photo library, AI-generates 3 Instagram content ideas/day, approve/reject flow, report | On-demand + AI |
+| 6 | **Calorie Tracker** | India-first food diary with goal progress, barcode lookup, photo-assisted meal estimates, search, and saved recipes | CRUD + external food data + AI-assisted confirmation |
 
-All five tools are independent modules sharing one auth session, one database, one design system, and one deployment.
+All six tools are independent modules sharing one auth session, one database, one design system, and one deployment.
 
 ---
 
@@ -161,12 +162,13 @@ CRON_SECRET
 
 ## 7. Build Phasing (recommended order)
 
-1. **Foundation**: Next.js scaffold, Supabase setup, auth, design system/shared components, nav shell (all 5 tabs visible, empty states)
+1. **Foundation**: Next.js scaffold, Supabase setup, auth, design system/shared components, nav shell (all 6 tabs visible, empty states)
 2. **Habit Tracker** (simplest, pure CRUD — validates the whole stack works end-to-end)
 3. **Ideas Tool** (introduces AI + external data pattern, reused by Content Creation)
 4. **Content Creation** (reuses Ideas Tool pattern + adds Media Library)
 5. **Masters Abroad** (introduces cron + email reminders)
 6. **Jobs Automation** (most complex — reuses cron, email, and AI patterns from above)
+7. **Calorie Tracker** (adds food data, device camera access, and vision-assisted logging; build its reliable manual/search path before the assisted paths)
 
 This order front-loads the simplest tool to validate infrastructure, then each subsequent tool reuses a pattern already proven by an earlier one.
 
@@ -180,6 +182,7 @@ See companion documents:
 - `03-Jobs-Automation-PRD.md`
 - `04-Habit-Tracker-PRD.md`
 - `05-Content-Creation-PRD.md`
+- `08-Calorie-Tracker-PRD.md`
 
 See also:
 - `06-Setup-Guide.md` — account creation & environment setup (already completed)

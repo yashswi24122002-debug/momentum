@@ -12,6 +12,10 @@ import {
   FileText,
   Landmark,
   Send,
+  Flame,
+  ScanBarcode,
+  Soup,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -80,6 +84,19 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Outreach Queue", href: "/jobs/outreach-queue", icon: Send },
       { label: "Pipeline", href: "/jobs/pipeline", icon: ListChecks },
       { label: "Resumes", href: "/jobs/resumes", icon: FileText },
+    ],
+  },
+  {
+    label: "Calories",
+    href: "/calories",
+    icon: Flame,
+    children: [
+      { label: "Today", href: "/calories", icon: Flame },
+      { label: "Log Food", href: "/calories/log", icon: ScanBarcode },
+      { label: "History", href: "/calories/history", icon: History },
+      { label: "Foods", href: "/calories/foods", icon: Soup },
+      { label: "Recipes", href: "/calories/recipes", icon: FileText },
+      { label: "Settings", href: "/calories/settings", icon: Settings },
     ],
   },
 ];
