@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
 // Creates a personal food (the "no result → personal-food form" path, PRD §7).
 export async function POST(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
@@ -61,6 +61,11 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase
     .from("foods")
     .insert({
+      // foods.user_id has no column default (unlike other per-user tables)
+      // — a personal food must always be explicitly attributed, since an
+      // omitted user_id here would otherwise satisfy the "global" (null)
+      // case and wrongly make a personal food visible to everyone.
+      user_id: user.id,
       name: name.trim(),
       normalized_name: normalizeFoodName(name),
       brand: brand ?? null,

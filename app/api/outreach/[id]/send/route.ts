@@ -19,7 +19,7 @@ export async function POST(
 
   const { data: outreach, error: fetchError } = await supabase
     .from("outreach")
-    .select("id, contact_email, email_subject, email_body_draft, email_body_final, job_posting_id, resume_id")
+    .select("id, user_id, contact_email, email_subject, email_body_draft, email_body_final, job_posting_id, resume_id")
     .eq("id", id)
     .single();
 

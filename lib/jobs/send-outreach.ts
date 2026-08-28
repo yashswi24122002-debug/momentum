@@ -4,6 +4,7 @@ import { addDays, todayLocalISODate } from "@/lib/date";
 
 export type OutreachRow = {
   id: string;
+  user_id: string;
   contact_email: string | null;
   email_subject: string | null;
   email_body_draft: string | null;
@@ -78,9 +79,12 @@ export async function sendOutreachEmail(
         .update({ stage: "applied_emailed", applied_via: "email", updated_at: nowIso })
         .eq("id", existingApplication.id);
     } else {
+      // Explicit user_id — this can run via the service-role cron (no
+      // session, so no auth.uid() for the column default to fall back on),
+      // so it's copied straight from the outreach row instead.
       await supabase
         .from("applications")
-        .insert({ job_posting_id: outreach.job_posting_id, stage: "applied_emailed", applied_via: "email" });
+        .insert({ job_posting_id: outreach.job_posting_id, user_id: outreach.user_id, stage: "applied_emailed", applied_via: "email" });
     }
   }
 
