@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ScanBarcode, Camera } from "lucide-react";
+import { ArrowLeft, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { FoodSearch } from "@/components/calories/food-search";
 import { RecipeQuickLog } from "@/components/calories/recipe-quick-log";
+import { BarcodeLog } from "@/components/calories/barcode-log";
 import { todayLocalISODate } from "@/lib/date";
 
 export function AddFoodFlow() {
@@ -40,11 +41,7 @@ export function AddFoodFlow() {
         </TabsContent>
 
         <TabsContent value="barcode" className="pt-4">
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-16 text-center">
-            <ScanBarcode className="size-6 text-text-muted" />
-            <p className="text-sm text-text-secondary">Barcode scanning is coming in the next update.</p>
-            <p className="text-xs text-text-muted">Use Search for now — packaged foods you log manually will still show up as personal foods.</p>
-          </div>
+          <BarcodeLog logDate={todayLocalISODate()} onLogged={handleLogged} />
         </TabsContent>
 
         <TabsContent value="photo" className="pt-4">
