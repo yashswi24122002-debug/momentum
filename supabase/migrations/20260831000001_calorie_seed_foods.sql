@@ -33,9 +33,13 @@ insert into foods (name, normalized_name, category, is_indian_food, kcal_per_100
 
 -- A second household-portion option per food, beyond the default_serving_name
 -- above — the "1 bowl"/"1 katori" household units the PRD prioritizes, plus
--- a 100g precision option for everything.
+-- a 100g precision option for everything. `on conflict do nothing` because
+-- Pakora's own default_serving_name is literally "100 g", which would
+-- otherwise collide with the precision-option row below for that one food.
 insert into food_servings (food_id, label, grams, sort_order)
-select id, '100 g', 100, 1 from foods where is_indian_food = true and source = 'ifct_reference';
+select id, '100 g', 100, 1 from foods where is_indian_food = true and source = 'ifct_reference'
+on conflict (food_id, label) do nothing;
 
 insert into food_servings (food_id, label, grams, sort_order)
-select id, default_serving_name, default_serving_g, 0 from foods where is_indian_food = true and source = 'ifct_reference';
+select id, default_serving_name, default_serving_g, 0 from foods where is_indian_food = true and source = 'ifct_reference'
+on conflict (food_id, label) do nothing;
