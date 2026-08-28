@@ -22,10 +22,13 @@ const BARCODE_FORMATS = [9, 10, 5, 14, 15]; // EAN_13, EAN_8, CODE_128, UPC_A, U
 const CAMERA_ELEMENT_ID = "calorie-barcode-camera";
 const FILE_ELEMENT_ID = "calorie-barcode-file";
 
+// Wide and short, not square — a retail barcode is a horizontal strip, and
+// a square/near-square box (the html5-qrcode default, tuned for QR codes)
+// crops off the ends of the barcode before it can be read.
 function qrbox(viewfinderWidth: number, viewfinderHeight: number) {
-  const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-  const size = Math.floor(minEdge * 0.7);
-  return { width: size, height: Math.floor(size * 0.55) };
+  const width = Math.floor(Math.min(viewfinderWidth * 0.85, 350));
+  const height = Math.min(viewfinderHeight - 20, Math.max(80, Math.floor(width * 0.35)));
+  return { width, height };
 }
 
 export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
@@ -57,6 +60,13 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
       const { Html5Qrcode } = await import("html5-qrcode");
       const scanner = new Html5Qrcode(CAMERA_ELEMENT_ID, {
         formatsToSupport: BARCODE_FORMATS,
+        // Forces the bundled zxing-based decoder instead of the browser's
+        // native BarcodeDetector API (html5-qrcode prefers native when
+        // present, by default) — support/behavior for that API varies
+        // enough across browsers/OSes that a real barcode scan was
+        // silently failing on it; the JS decoder is the one path this is
+        // actually tested against.
+        useBarCodeDetectorIfSupported: false,
         verbose: false,
       });
       scannerRef.current = scanner;
@@ -93,12 +103,20 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
     if (!file) return;
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode(FILE_ELEMENT_ID, false);
+      const scanner = new Html5Qrcode(FILE_ELEMENT_ID, {
+        formatsToSupport: BARCODE_FORMATS,
+        useBarCodeDetectorIfSupported: false,
+        verbose: false,
+      });
       const decoded = await scanner.scanFile(file, false);
       scanner.clear();
       onCode(decoded);
-    } catch {
-      setCameraError("Couldn't read a barcode from that image — try a clearer photo or enter the code manually.");
+    } catch (error) {
+      setCameraError(
+        `Couldn't read a barcode from that image — try a clearer, closer, well-lit photo, or enter the code manually.${
+          error instanceof Error ? ` (${error.message})` : ""
+        }`
+      );
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -121,7 +139,11 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
         </Button>
       )}
 
-      <div id={FILE_ELEMENT_ID} className="hidden" />
+      {/* Off-screen, not display:none — html5-qrcode draws the uploaded
+          image onto an internal canvas here, which can end up zero-size
+          (and silently fail to decode) inside a display:none container in
+          some browsers. */}
+      <div id={FILE_ELEMENT_ID} style={{ position: "fixed", top: -9999, left: -9999, width: 300, height: 300 }} />
 
       {cameraError && <p className="text-xs text-danger">{cameraError}</p>}
 
