@@ -16,6 +16,7 @@ import {
   ScanBarcode,
   Soup,
   Settings,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +31,8 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   children?: NavChild[];
+  /** Only ever rendered for the admin — real enforcement is server-side (lib/supabase/admin-guard.ts), this just keeps it out of a member's UI. */
+  adminOnly?: boolean;
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -98,5 +101,11 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Recipes", href: "/calories/recipes", icon: FileText },
       { label: "Settings", href: "/calories/settings", icon: Settings },
     ],
+  },
+  {
+    label: "Admin",
+    href: "/admin",
+    icon: ShieldCheck,
+    adminOnly: true,
   },
 ];

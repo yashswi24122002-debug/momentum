@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { NavContent } from "@/components/shared/sidebar-nav";
 
-export function MobileHeader() {
+export function MobileHeader({ isAdmin = false }: { isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -18,7 +18,7 @@ export function MobileHeader() {
         </Button>
         <SheetContent side="left" className="w-64 p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <NavContent onNavigate={() => setOpen(false)} />
+          <NavContent onNavigate={() => setOpen(false)} isAdmin={isAdmin} />
         </SheetContent>
       </Sheet>
     </header>

@@ -108,8 +108,9 @@ function NavGroup({
 }
 
 /** Shared nav tree, used inside the desktop sidebar and the mobile drawer. */
-export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
+export function NavContent({ onNavigate, isAdmin = false }: { onNavigate?: () => void; isAdmin?: boolean }) {
   const pathname = usePathname();
+  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <div className="flex h-full flex-col">
@@ -117,7 +118,7 @@ export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
         <span className="text-sm font-semibold tracking-tight text-text-primary">Momentum</span>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-3">
-        {NAV_ITEMS.map((item) =>
+        {items.map((item) =>
           item.children ? (
             <NavGroup key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
           ) : (
@@ -139,10 +140,10 @@ export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function SidebarNav() {
+export function SidebarNav({ isAdmin = false }: { isAdmin?: boolean }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-50 hidden w-56 flex-col border-r border-border bg-background md:flex">
-      <NavContent />
+      <NavContent isAdmin={isAdmin} />
     </aside>
   );
 }

@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "@/components/shared/nav-items";
 
-export function BottomTabBar() {
+export function BottomTabBar({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
+  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
       <ul className="flex items-stretch justify-around">
-        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+        {items.map(({ label, href, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
             <li key={href} className="flex-1">
