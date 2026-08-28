@@ -8,23 +8,27 @@ import { Input } from "@/components/ui/input";
 // Retail barcode formats only (PRD §4: "EAN/UPC/Code 128 and more") — not
 // QR codes, which would also decode but aren't what a packaged-food label
 // ever uses.
-const BARCODE_FORMATS = [9, 10, 5, 14, 15]; // EAN_13, EAN_8, CODE_128, UPC_A, UPC_E
+const BARCODE_FORMATS = [9, 10, 5, 14, 15]; // html5-qrcode enum: EAN_13, EAN_8, CODE_128, UPC_A, UPC_E
+const NATIVE_FORMATS = ["ean_13", "ean_8", "code_128", "upc_a", "upc_e"];
 
-// Two separate, permanently-mounted containers — one for the live camera
-// scanner, one dedicated to file-upload decoding. Each is owned by its own
-// Html5Qrcode instance for its whole lifetime. Previously these shared one
-// div that was conditionally mounted/unmounted based on camera state; once
-// html5-qrcode had injected its own <video>/<canvas> children into that
-// node, React unmounting the div out from under a live camera stream (or
-// a second Html5Qrcode instance targeting the same node for a file scan)
-// crashed the whole renderer, not just this component — hence the "This
-// page couldn't load" browser-level failure rather than an in-app error.
 const CAMERA_ELEMENT_ID = "calorie-barcode-camera";
 const FILE_ELEMENT_ID = "calorie-barcode-file";
 
+type BarcodeDetectorLike = { detect: (source: CanvasImageSource) => Promise<Array<{ rawValue: string }>> };
+declare global {
+  interface Window {
+    BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorLike;
+  }
+}
+
+function hasNativeDetector(): boolean {
+  return typeof window !== "undefined" && typeof window.BarcodeDetector !== "undefined";
+}
+
 // Wide and short, not square — a retail barcode is a horizontal strip, and
 // a square/near-square box (the html5-qrcode default, tuned for QR codes)
-// crops off the ends of the barcode before it can be read.
+// crops off the ends of the barcode before it can be read. Only used by
+// the html5-qrcode fallback path.
 function qrbox(viewfinderWidth: number, viewfinderHeight: number) {
   const width = Math.floor(Math.min(viewfinderWidth * 0.85, 350));
   const height = Math.min(viewfinderHeight - 20, Math.max(80, Math.floor(width * 0.35)));
@@ -36,10 +40,23 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState("");
   const scannerRef = useRef<import("html5-qrcode").Html5Qrcode | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const detectingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function stopNativeCamera() {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }
 
   useEffect(() => {
     return () => {
+      stopNativeCamera();
       const scanner = scannerRef.current;
       if (scanner) {
         scanner
@@ -51,22 +68,59 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
   }, []);
 
   // Camera permission is only requested once this is actually called —
-  // i.e. only after the user presses "Scan with camera" (PRD §7).
+  // i.e. only after the user presses "Scan with camera" (PRD §7). Prefers
+  // the browser's native BarcodeDetector (hardware-backed on most Android/
+  // Chrome devices, far more reliable on real-world 1D barcodes than a JS
+  // decoder) and only falls back to html5-qrcode's bundled zxing decoder
+  // on browsers that don't support it (Safari, some desktop browsers).
   async function startCamera() {
     setCameraError(null);
     setCameraActive(true);
+
+    if (hasNativeDetector()) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        streamRef.current = stream;
+        if (!videoRef.current) throw new Error("Video element not ready");
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        const detector = new window.BarcodeDetector!({ formats: NATIVE_FORMATS });
+
+        const tick = async () => {
+          if (!videoRef.current || detectingRef.current) {
+            rafRef.current = requestAnimationFrame(tick);
+            return;
+          }
+          detectingRef.current = true;
+          try {
+            const results = await detector.detect(videoRef.current);
+            if (results.length > 0) {
+              onCode(results[0].rawValue);
+              stopNativeCamera();
+              setCameraActive(false);
+              return;
+            }
+          } catch {
+            // Transient per-frame decode errors are expected and ignored — keep scanning.
+          }
+          detectingRef.current = false;
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      } catch (error) {
+        stopNativeCamera();
+        setCameraError(error instanceof Error ? error.message : "Couldn't access the camera — try image upload or manual entry instead.");
+        setCameraActive(false);
+        return;
+      }
+    }
 
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
       const scanner = new Html5Qrcode(CAMERA_ELEMENT_ID, {
         formatsToSupport: BARCODE_FORMATS,
-        // Forces the bundled zxing-based decoder instead of the browser's
-        // native BarcodeDetector API (html5-qrcode prefers native when
-        // present, by default) — support/behavior for that API varies
-        // enough across browsers/OSes that a real barcode scan was
-        // silently failing on it; the JS decoder is the one path this is
-        // actually tested against.
-        useBarCodeDetectorIfSupported: false,
         verbose: false,
       });
       scannerRef.current = scanner;
@@ -91,6 +145,7 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
   }
 
   async function stopCamera() {
+    stopNativeCamera();
     const scanner = scannerRef.current;
     if (scanner) {
       await scanner.stop().catch(() => {});
@@ -101,11 +156,29 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
 
   async function handleFileUpload(file: File | null) {
     if (!file) return;
+
+    if (hasNativeDetector()) {
+      try {
+        const bitmap = await createImageBitmap(file);
+        const detector = new window.BarcodeDetector!({ formats: NATIVE_FORMATS });
+        const results = await detector.detect(bitmap);
+        if (results.length === 0) throw new Error("No barcode found in image");
+        onCode(results[0].rawValue);
+      } catch (error) {
+        setCameraError(
+          `Couldn't read a barcode from that image — try a clearer, closer, well-lit photo, or enter the code manually.${
+            error instanceof Error ? ` (${error.message})` : ""
+          }`
+        );
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
       const scanner = new Html5Qrcode(FILE_ELEMENT_ID, {
         formatsToSupport: BARCODE_FORMATS,
-        useBarCodeDetectorIfSupported: false,
         verbose: false,
       });
       const decoded = await scanner.scanFile(file, false);
@@ -130,6 +203,14 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
         </Button>
       )}
 
+      {/* Native-detector path renders into this <video> directly; it stays
+          mounted permanently (visibility via className only) so it's never
+          torn out from under a live stream. */}
+      <video ref={videoRef} muted playsInline className={cameraActive ? "w-full rounded-xl" : "hidden"} />
+
+      {/* html5-qrcode fallback path renders its own <video>/<canvas> into
+          this div — kept separate from the one above so the two camera
+          implementations never share (and fight over) the same DOM node. */}
       <div id={CAMERA_ELEMENT_ID} className={cameraActive ? "overflow-hidden rounded-xl" : "hidden"} />
 
       {cameraActive && (
@@ -139,10 +220,10 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
         </Button>
       )}
 
-      {/* Off-screen, not display:none — html5-qrcode draws the uploaded
-          image onto an internal canvas here, which can end up zero-size
-          (and silently fail to decode) inside a display:none container in
-          some browsers. */}
+      {/* Off-screen, not display:none — html5-qrcode's file-scan fallback
+          draws the uploaded image onto an internal canvas here, which can
+          end up zero-size (and silently fail to decode) inside a
+          display:none container in some browsers. */}
       <div id={FILE_ELEMENT_ID} style={{ position: "fixed", top: -9999, left: -9999, width: 300, height: 300 }} />
 
       {cameraError && <p className="text-xs text-danger">{cameraError}</p>}
