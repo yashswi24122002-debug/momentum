@@ -10,7 +10,23 @@ import { Input } from "@/components/ui/input";
 // ever uses.
 const BARCODE_FORMATS = [9, 10, 5, 14, 15]; // EAN_13, EAN_8, CODE_128, UPC_A, UPC_E
 
-const SCANNER_ELEMENT_ID = "calorie-barcode-scanner";
+// Two separate, permanently-mounted containers — one for the live camera
+// scanner, one dedicated to file-upload decoding. Each is owned by its own
+// Html5Qrcode instance for its whole lifetime. Previously these shared one
+// div that was conditionally mounted/unmounted based on camera state; once
+// html5-qrcode had injected its own <video>/<canvas> children into that
+// node, React unmounting the div out from under a live camera stream (or
+// a second Html5Qrcode instance targeting the same node for a file scan)
+// crashed the whole renderer, not just this component — hence the "This
+// page couldn't load" browser-level failure rather than an in-app error.
+const CAMERA_ELEMENT_ID = "calorie-barcode-camera";
+const FILE_ELEMENT_ID = "calorie-barcode-file";
+
+function qrbox(viewfinderWidth: number, viewfinderHeight: number) {
+  const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+  const size = Math.floor(minEdge * 0.7);
+  return { width: size, height: Math.floor(size * 0.55) };
+}
 
 export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
   const [cameraActive, setCameraActive] = useState(false);
@@ -21,7 +37,13 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
 
   useEffect(() => {
     return () => {
-      scannerRef.current?.stop().catch(() => {});
+      const scanner = scannerRef.current;
+      if (scanner) {
+        scanner
+          .stop()
+          .catch(() => {})
+          .finally(() => scanner.clear());
+      }
     };
   }, []);
 
@@ -33,7 +55,7 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
 
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, {
+      const scanner = new Html5Qrcode(CAMERA_ELEMENT_ID, {
         formatsToSupport: BARCODE_FORMATS,
         verbose: false,
       });
@@ -41,10 +63,13 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
 
       await scanner.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 260, height: 160 } },
+        { fps: 10, qrbox },
         (decodedText) => {
           onCode(decodedText);
-          scanner.stop().catch(() => {});
+          scanner
+            .stop()
+            .catch(() => {})
+            .finally(() => scanner.clear());
           setCameraActive(false);
         },
         undefined
@@ -56,7 +81,11 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
   }
 
   async function stopCamera() {
-    await scannerRef.current?.stop().catch(() => {});
+    const scanner = scannerRef.current;
+    if (scanner) {
+      await scanner.stop().catch(() => {});
+      scanner.clear();
+    }
     setCameraActive(false);
   }
 
@@ -64,8 +93,9 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
     if (!file) return;
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
-      const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, false);
+      const scanner = new Html5Qrcode(FILE_ELEMENT_ID, false);
       const decoded = await scanner.scanFile(file, false);
+      scanner.clear();
       onCode(decoded);
     } catch {
       setCameraError("Couldn't read a barcode from that image — try a clearer photo or enter the code manually.");
@@ -75,23 +105,23 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
 
   return (
     <div className="space-y-4">
-      {cameraActive ? (
-        <div className="space-y-2">
-          <div id={SCANNER_ELEMENT_ID} className="overflow-hidden rounded-xl" />
-          <Button variant="outline" size="sm" onClick={stopCamera} className="w-full">
-            <X className="size-3.5" />
-            Stop camera
-          </Button>
-        </div>
-      ) : (
+      {!cameraActive && (
         <Button onClick={startCamera} className="w-full">
           <Camera className="size-4" />
           Scan with camera
         </Button>
       )}
 
-      {/* Kept mounted (hidden) even in camera mode so scanFile() always has its target element. */}
-      {!cameraActive && <div id={SCANNER_ELEMENT_ID} className="hidden" />}
+      <div id={CAMERA_ELEMENT_ID} className={cameraActive ? "overflow-hidden rounded-xl" : "hidden"} />
+
+      {cameraActive && (
+        <Button variant="outline" size="sm" onClick={stopCamera} className="w-full">
+          <X className="size-3.5" />
+          Stop camera
+        </Button>
+      )}
+
+      <div id={FILE_ELEMENT_ID} className="hidden" />
 
       {cameraError && <p className="text-xs text-danger">{cameraError}</p>}
 
@@ -102,7 +132,7 @@ export function BarcodeScanner({ onCode }: { onCode: (code: string) => void }) {
       </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e.target.files?.[0] ?? null)} />
-      <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
+      <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()} disabled={cameraActive}>
         <Upload className="size-4" />
         Upload a photo of the barcode
       </Button>
