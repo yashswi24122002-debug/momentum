@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BarChart3, Copy, Check, Key, KeyRound, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Check, Key, KeyRound, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { MemberDashboardContent } from "@/components/admin/member-dashboard";
 import { TOOL_ORDER, TOOL_LABELS, FEATURE_ORDER, FEATURE_LABELS } from "@/lib/admin/ui";
 import type { Profile, ToolKey, FeatureKey } from "@/lib/types/admin";
 
@@ -188,135 +189,135 @@ export function EditUser({ userId }: { userId: string }) {
 
   return (
     <div className="flex flex-1 flex-col gap-6 pb-16">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" render={<Link href="/admin/users" />} nativeButton={false}>
-            <ArrowLeft className="size-4" />
-          </Button>
-          <h1 className="text-xl font-semibold text-text-primary">{detail.profile.display_name || detail.profile.email}</h1>
-        </div>
-        <Button variant="outline" size="sm" render={<Link href={`/admin/users/${userId}/dashboard`} />} nativeButton={false}>
-          <BarChart3 className="size-3.5" />
-          View their data
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" render={<Link href="/admin/users" />} nativeButton={false}>
+          <ArrowLeft className="size-4" />
         </Button>
+        <h1 className="text-xl font-semibold text-text-primary">{detail.profile.display_name || detail.profile.email}</h1>
       </div>
 
-      <Card className="max-w-md gap-3 border-border bg-surface p-5">
-        <div className="space-y-1.5">
-          <Label>Display name</Label>
-          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Email</Label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <Button size="sm" onClick={saveProfile} disabled={saving} className="w-fit">
-          Save
-        </Button>
-      </Card>
-
-      <Card className="max-w-md gap-3 border-border bg-surface p-5">
-        <CardHeader className="p-0">
-          <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
-            <KeyRound className="size-3.5" />
-            Password
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 p-0">
-          <p className="text-xs text-text-muted">
-            Passwords are never stored in a way anyone can read back — not even the admin. Resetting sets a brand-new
-            one you can hand to them; they&apos;ll be forced to change it on their next login.
-          </p>
-          {newTempPassword ? (
-            <>
-              <div className="rounded-lg bg-background p-3 font-mono text-sm text-text-primary">{newTempPassword}</div>
-              <Button variant="outline" size="sm" onClick={handleCopyTempPassword}>
-                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                {copied ? "Copied" : "Copy password"}
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" onClick={resetPassword} disabled={resetting} className="w-fit">
-              Reset password
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="max-w-md gap-3 border-border bg-surface p-5">
-        <CardHeader className="p-0">
-          <CardTitle className="text-sm text-text-secondary">Tool access</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 p-0">
-          {TOOL_ORDER.map((tool) => (
-            <label key={tool} className="flex items-center gap-2 text-sm text-text-primary">
-              <Checkbox checked={tools[tool]} onCheckedChange={(checked) => setTools((prev) => ({ ...prev, [tool]: Boolean(checked) }))} />
-              {TOOL_LABELS[tool]}
-            </label>
-          ))}
-          <Button size="sm" onClick={saveTools} disabled={saving} className="mt-2 w-fit">
-            Save tool access
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="max-w-md gap-3 border-border bg-surface p-5">
-        <CardHeader className="p-0">
-          <CardTitle className="text-sm text-text-secondary">Daily AI usage limits</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 p-0">
-          {FEATURE_ORDER.map((feature) => (
-            <div key={feature} className="flex items-center justify-between gap-2">
-              <span className="text-sm text-text-primary">{FEATURE_LABELS[feature]}</span>
-              <Input
-                type="number"
-                min="0"
-                placeholder="Unlimited"
-                className="w-28"
-                value={limits[feature] ?? ""}
-                onChange={(e) => setLimits((prev) => ({ ...prev, [feature]: e.target.value }))}
-              />
-            </div>
-          ))}
-          <p className="text-xs text-text-muted">Leave blank for unlimited.</p>
-          <Button size="sm" onClick={saveLimits} disabled={saving} className="w-fit">
-            Save limits
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="max-w-md gap-3 border-border bg-surface p-5">
-        <CardHeader className="p-0">
-          <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
-            <Key className="size-3.5" />
-            Gemini API key
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 p-0">
-          <p className="text-xs text-text-muted">
-            {detail.hasApiKey ? "Key on file — this member's AI usage runs on their own key." : "No key set — this member's AI features are blocked until one is added."}
-          </p>
-          <div className="flex gap-2">
-            <PasswordInput placeholder="Paste their Gemini API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-            <Button size="sm" onClick={saveApiKey} disabled={saving}>
-              Save
-            </Button>
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[420px_1fr]">
+        <div className="flex flex-col gap-6">
+        <Card className="gap-3 border-border bg-surface p-5">
+          <div className="space-y-1.5">
+            <Label>Display name</Label>
+            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </div>
-          {detail.hasApiKey && (
-            <Button variant="outline" size="sm" onClick={removeApiKey} disabled={saving}>
-              Remove key
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+          <div className="space-y-1.5">
+            <Label>Email</Label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <Button size="sm" onClick={saveProfile} disabled={saving} className="w-fit">
+            Save
+          </Button>
+        </Card>
 
-      <Card className="max-w-md gap-2 border-danger/30 bg-surface p-5">
-        <CardTitle className="text-sm text-danger">Danger zone</CardTitle>
-        <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} className="w-fit">
-          <Trash2 className="size-3.5" />
-          Delete account
-        </Button>
-      </Card>
+        <Card className="gap-3 border-border bg-surface p-5">
+          <CardHeader className="p-0">
+            <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
+              <KeyRound className="size-3.5" />
+              Password
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 p-0">
+            <p className="text-xs text-text-muted">
+              Passwords are never stored in a way anyone can read back — not even the admin. Resetting sets a brand-new
+              one you can hand to them; they&apos;ll be forced to change it on their next login.
+            </p>
+            {newTempPassword ? (
+              <>
+                <div className="rounded-lg bg-background p-3 font-mono text-sm text-text-primary">{newTempPassword}</div>
+                <Button variant="outline" size="sm" onClick={handleCopyTempPassword}>
+                  {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {copied ? "Copied" : "Copy password"}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={resetPassword} disabled={resetting} className="w-fit">
+                Reset password
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="gap-3 border-border bg-surface p-5">
+          <CardHeader className="p-0">
+            <CardTitle className="text-sm text-text-secondary">Tool access</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 p-0">
+            {TOOL_ORDER.map((tool) => (
+              <label key={tool} className="flex items-center gap-2 text-sm text-text-primary">
+                <Checkbox checked={tools[tool]} onCheckedChange={(checked) => setTools((prev) => ({ ...prev, [tool]: Boolean(checked) }))} />
+                {TOOL_LABELS[tool]}
+              </label>
+            ))}
+            <Button size="sm" onClick={saveTools} disabled={saving} className="mt-2 w-fit">
+              Save tool access
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="gap-3 border-border bg-surface p-5">
+          <CardHeader className="p-0">
+            <CardTitle className="text-sm text-text-secondary">Daily AI usage limits</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-0">
+            {FEATURE_ORDER.map((feature) => (
+              <div key={feature} className="flex items-center justify-between gap-2">
+                <span className="text-sm text-text-primary">{FEATURE_LABELS[feature]}</span>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="Unlimited"
+                  className="w-28"
+                  value={limits[feature] ?? ""}
+                  onChange={(e) => setLimits((prev) => ({ ...prev, [feature]: e.target.value }))}
+                />
+              </div>
+            ))}
+            <p className="text-xs text-text-muted">Leave blank for unlimited.</p>
+            <Button size="sm" onClick={saveLimits} disabled={saving} className="w-fit">
+              Save limits
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="gap-3 border-border bg-surface p-5">
+          <CardHeader className="p-0">
+            <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
+              <Key className="size-3.5" />
+              Gemini API key
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 p-0">
+            <p className="text-xs text-text-muted">
+              {detail.hasApiKey ? "Key on file — this member's AI usage runs on their own key." : "No key set — this member's AI features are blocked until one is added."}
+            </p>
+            <div className="flex gap-2">
+              <PasswordInput placeholder="Paste their Gemini API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+              <Button size="sm" onClick={saveApiKey} disabled={saving}>
+                Save
+              </Button>
+            </div>
+            {detail.hasApiKey && (
+              <Button variant="outline" size="sm" onClick={removeApiKey} disabled={saving}>
+                Remove key
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="gap-2 border-danger/30 bg-surface p-5">
+          <CardTitle className="text-sm text-danger">Danger zone</CardTitle>
+          <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} className="w-fit">
+            <Trash2 className="size-3.5" />
+            Delete account
+          </Button>
+        </Card>
+        </div>
+
+        <MemberDashboardContent userId={userId} />
+      </div>
 
       <ConfirmDeleteDialog
         open={deleteOpen}

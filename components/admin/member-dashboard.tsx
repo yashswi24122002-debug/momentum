@@ -87,19 +87,16 @@ function GroupedList<T extends { status: string }>({
   );
 }
 
-export function MemberDashboard({ userId }: { userId: string }) {
+// Pure data content, no page chrome (header/back button) — used both
+// embedded inline (edit-user.tsx, alongside the admin controls) and, via
+// MemberDashboard below, as a standalone page for a wider full-screen view.
+export function MemberDashboardContent({ userId }: { userId: string }) {
   const [data, setData] = useState<MemberData | null>(null);
-  const [name, setName] = useState<string>("");
 
   useEffect(() => {
     async function load() {
-      const [dataRes, profileRes] = await Promise.all([
-        fetch(`/api/admin/users/${userId}/dashboard`),
-        fetch(`/api/admin/users/${userId}`),
-      ]);
-      setData(await dataRes.json());
-      const { profile } = await profileRes.json();
-      setName(profile?.display_name || profile?.email || "");
+      const res = await fetch(`/api/admin/users/${userId}/dashboard`);
+      setData(await res.json());
     }
     load();
   }, [userId]);
@@ -107,7 +104,6 @@ export function MemberDashboard({ userId }: { userId: string }) {
   if (!data) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
         <Skeleton className="h-64 w-full rounded-xl" />
         <Skeleton className="h-64 w-full rounded-xl" />
       </div>
@@ -115,14 +111,7 @@ export function MemberDashboard({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 pb-16">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" render={<Link href={`/admin/users/${userId}`} />} nativeButton={false}>
-          <ArrowLeft className="size-4" />
-        </Button>
-        <h1 className="text-xl font-semibold text-text-primary">{name}&apos;s data</h1>
-      </div>
-
+    <div className="flex flex-1 flex-col gap-6">
       <Card className="border-border bg-surface">
         <CardHeader>
           <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
@@ -228,6 +217,34 @@ export function MemberDashboard({ userId }: { userId: string }) {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+// Standalone full-page version — same content, with its own header/back
+// button, for when the inline column (edit-user.tsx) is too cramped or the
+// admin wants to link directly to just this view.
+export function MemberDashboard({ userId }: { userId: string }) {
+  const [name, setName] = useState<string>("");
+
+  useEffect(() => {
+    async function load() {
+      const res = await fetch(`/api/admin/users/${userId}`);
+      const { profile } = await res.json();
+      setName(profile?.display_name || profile?.email || "");
+    }
+    load();
+  }, [userId]);
+
+  return (
+    <div className="flex flex-1 flex-col gap-6 pb-16">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" render={<Link href={`/admin/users/${userId}`} />} nativeButton={false}>
+          <ArrowLeft className="size-4" />
+        </Button>
+        <h1 className="text-xl font-semibold text-text-primary">{name && `${name}'s data`}</h1>
+      </div>
+      <MemberDashboardContent userId={userId} />
     </div>
   );
 }
