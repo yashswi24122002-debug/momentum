@@ -7,14 +7,14 @@ const SIGNED_URL_TTL_SECONDS = 3600;
 // Not in the PRD's route table (only POST is listed), but the document
 // vault UI page needs a way to list what's already uploaded.
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
   const taskId = searchParams.get("task_id");
   const universityId = searchParams.get("university_id");
 
-  let query = supabase.from("documents").select("*").order("uploaded_at", { ascending: false });
+  let query = supabase.from("documents").select("*").eq("user_id", user.id).order("uploaded_at", { ascending: false });
   if (taskId) query = query.eq("task_id", taskId);
   if (universityId) query = query.eq("university_id", universityId);
 
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 // The client uploads the file directly to Supabase Storage, then calls
 // this with the resulting storage path (same pattern as /api/media).
 export async function POST(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
@@ -55,7 +55,11 @@ export async function POST(request: NextRequest) {
   // re-uploading a doc for the same task tracks as a new version.
   let version = 1;
   if (task_id) {
-    const { count } = await supabase.from("documents").select("id", { count: "exact", head: true }).eq("task_id", task_id);
+    const { count } = await supabase
+      .from("documents")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("task_id", task_id);
     version = (count ?? 0) + 1;
   }
 

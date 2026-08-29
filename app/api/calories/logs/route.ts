@@ -34,7 +34,7 @@ type ItemInput = {
  * neither reference (custom/AI-photo entries) use the caller-supplied
  * values directly, since there's nothing to scale from.
  */
-async function resolveItemNutrition(supabase: SupabaseClient, item: ItemInput) {
+async function resolveItemNutrition(supabase: SupabaseClient, userId: string, item: ItemInput) {
   if (item.food_id) {
     const { data: food, error } = await supabase
       .from("foods")
@@ -59,6 +59,7 @@ async function resolveItemNutrition(supabase: SupabaseClient, item: ItemInput) {
       .from("recipes")
       .select("yield_servings, recipe_ingredients(quantity_g, foods(kcal_per_100g, protein_g_per_100g, carbs_g_per_100g, fat_g_per_100g))")
       .eq("id", item.recipe_id)
+      .eq("user_id", userId)
       .single();
     if (error || !recipe) throw new Error(`Recipe ${item.recipe_id} not found`);
 
@@ -99,7 +100,7 @@ async function resolveItemNutrition(supabase: SupabaseClient, item: ItemInput) {
 }
 
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
@@ -107,7 +108,7 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
 
-  let query = supabase.from("food_logs").select("*, food_log_items(*)").order("logged_at", { ascending: true });
+  let query = supabase.from("food_logs").select("*, food_log_items(*)").eq("user_id", user.id).order("logged_at", { ascending: true });
   if (date) query = query.eq("logged_on", date);
   if (from) query = query.gte("logged_on", from);
   if (to) query = query.lte("logged_on", to);
@@ -124,7 +125,7 @@ export async function GET(request: NextRequest) {
 // updates the page optimistically," §14 "nothing persists until the user
 // presses Save." One POST = one confirmed meal, however many items it has.
 export async function POST(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest) {
   let resolvedItems;
   try {
     resolvedItems = await Promise.all(
-      items.map(async (item) => ({ item, nutrition: await resolveItemNutrition(supabase, item) }))
+      items.map(async (item) => ({ item, nutrition: await resolveItemNutrition(supabase, user.id, item) }))
     );
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Couldn't resolve item nutrition" }, { status: 400 });

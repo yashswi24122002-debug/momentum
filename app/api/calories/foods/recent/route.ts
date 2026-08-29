@@ -8,12 +8,23 @@ const RECENT_LIMIT = 12;
 // recents" quick-add path needs a way to surface recently-logged foods,
 // distinct by food_id, most-recent first.
 export async function GET() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
+
+  // food_log_items has no user_id of its own — ownership derives from its
+  // parent food_log, so an explicit food_log_id filter is what actually
+  // limits "recent" to the caller's own logs (RLS's admin bypass otherwise
+  // returns everyone's).
+  const { data: myLogs } = await supabase.from("food_logs").select("id").eq("user_id", user.id);
+  const logIds = (myLogs ?? []).map((l) => l.id);
+  if (logIds.length === 0) {
+    return NextResponse.json({ foods: [] });
+  }
 
   const { data: items, error } = await supabase
     .from("food_log_items")
     .select("food_id, created_at")
+    .in("food_log_id", logIds)
     .not("food_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(LOOKBACK_ITEMS);

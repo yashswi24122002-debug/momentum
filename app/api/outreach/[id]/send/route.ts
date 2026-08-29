@@ -12,7 +12,7 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -21,6 +21,7 @@ export async function POST(
     .from("outreach")
     .select("id, user_id, contact_email, email_subject, email_body_draft, email_body_final, job_posting_id, resume_id")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single();
 
   if (fetchError || !outreach) {
@@ -34,7 +35,7 @@ export async function POST(
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
 
-  const { data: updated } = await supabase.from("outreach").select("*").eq("id", id).single();
+  const { data: updated } = await supabase.from("outreach").select("*").eq("id", id).eq("user_id", user.id).single();
 
   return NextResponse.json({ outreach: updated });
 }

@@ -74,7 +74,7 @@ export async function POST(
 
   let resume: { id: string; name: string; focus_area: string | null } | null = null;
   if (resumeId) {
-    const { data } = await supabase.from("resumes").select("id, name, focus_area").eq("id", resumeId).single();
+    const { data } = await supabase.from("resumes").select("id, name, focus_area").eq("id", resumeId).eq("user_id", user.id).single();
     resume = data ?? null;
   }
 

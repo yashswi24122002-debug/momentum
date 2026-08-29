@@ -69,6 +69,7 @@ export async function POST(
     .from("content_ideas")
     .select("*")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single();
 
   if (fetchError || !idea) {
@@ -78,6 +79,7 @@ export async function POST(
   const { data: matchedMedia } = await supabase
     .from("media")
     .select("location_name, taken_at")
+    .eq("user_id", user.id)
     .in("id", idea.matched_media_ids ?? []);
 
   let report: z.infer<typeof ReportSchema>;
@@ -102,7 +104,7 @@ export async function POST(
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  const { error: updateError } = await supabase.from("content_ideas").update({ status: "approved" }).eq("id", id);
+  const { error: updateError } = await supabase.from("content_ideas").update({ status: "approved" }).eq("id", id).eq("user_id", user.id);
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }

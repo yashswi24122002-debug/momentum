@@ -4,12 +4,13 @@ import { requireUser } from "@/lib/supabase/route-guard";
 // Not in the PRD's route table as a dedicated endpoint, but PRD §7's
 // "favourites and recents" quick-add path needs somewhere to read/toggle them.
 export async function GET() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { data, error } = await supabase
     .from("food_favourites")
     .select("*, foods(id, name, default_serving_name, default_serving_g, kcal_per_100g), recipes(id, name, yield_servings)")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -44,14 +45,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
   const foodId = searchParams.get("food_id");
   const recipeId = searchParams.get("recipe_id");
 
-  let query = supabase.from("food_favourites").delete();
+  let query = supabase.from("food_favourites").delete().eq("user_id", user.id);
   if (foodId) query = query.eq("food_id", foodId);
   else if (recipeId) query = query.eq("recipe_id", recipeId);
   else return NextResponse.json({ error: "food_id or recipe_id is required" }, { status: 400 });

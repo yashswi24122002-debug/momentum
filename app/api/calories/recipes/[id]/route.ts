@@ -6,7 +6,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -14,6 +14,7 @@ export async function GET(
     .from("recipes")
     .select("*, recipe_ingredients(*, foods(id, name, kcal_per_100g, protein_g_per_100g, carbs_g_per_100g, fat_g_per_100g))")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single();
 
   if (error || !data) {
@@ -35,7 +36,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -54,7 +55,7 @@ export async function PATCH(
   if (typeof yield_servings === "number") updates.yield_servings = yield_servings;
   if (total_cooked_weight_g !== undefined) updates.total_cooked_weight_g = total_cooked_weight_g;
 
-  const { data: recipe, error } = await supabase.from("recipes").update(updates).eq("id", id).select().single();
+  const { data: recipe, error } = await supabase.from("recipes").update(updates).eq("id", id).eq("user_id", user.id).select().single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -76,11 +77,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
-  const { error } = await supabase.from("recipes").delete().eq("id", id);
+  const { error } = await supabase.from("recipes").delete().eq("id", id).eq("user_id", user.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

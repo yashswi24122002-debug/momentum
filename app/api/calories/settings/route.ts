@@ -4,10 +4,10 @@ import { requireUser } from "@/lib/supabase/route-guard";
 // Single-row settings table (Master PRD single-user model) — GET returns
 // the one row if it exists, or null so the client can show onboarding.
 export async function GET() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
-  const { data, error } = await supabase.from("calorie_settings").select("*").maybeSingle();
+  const { data, error } = await supabase.from("calorie_settings").select("*").eq("user_id", user.id).maybeSingle();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -18,7 +18,7 @@ export async function GET() {
 // Upsert-by-first-row: creates the settings row on first save (onboarding),
 // updates it thereafter. There's only ever one row for this single-user app.
 export async function PATCH(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "daily_calorie_goal must be between 500 and 10000" }, { status: 400 });
   }
 
-  const { data: existing } = await supabase.from("calorie_settings").select("id").maybeSingle();
+  const { data: existing } = await supabase.from("calorie_settings").select("id").eq("user_id", user.id).maybeSingle();
 
   const payload = {
     daily_calorie_goal,
@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest) {
   };
 
   const { data, error } = existing
-    ? await supabase.from("calorie_settings").update(payload).eq("id", existing.id).select().single()
+    ? await supabase.from("calorie_settings").update(payload).eq("id", existing.id).eq("user_id", user.id).select().single()
     : await supabase.from("calorie_settings").insert(payload).select().single();
 
   if (error) {

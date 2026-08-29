@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const date = searchParams.get("date");
 
-  let query = supabase.from("content_ideas").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("content_ideas").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
   if (status) query = query.eq("status", status);
   if (date) query = query.eq("date_generated", date);
 

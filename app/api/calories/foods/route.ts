@@ -6,7 +6,7 @@ import { normalizeFoodName } from "@/lib/calories/normalize";
 // name/barcode. No query param returns the full personal-food set (used by
 // the "personal foods" list view) plus nothing else — search is opt-in via ?q=.
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
@@ -15,7 +15,11 @@ export async function GET(request: NextRequest) {
   const indianOnly = searchParams.get("indianOnly") === "true";
 
   let query = supabase.from("foods").select("*, food_servings(*)").order("name");
-  if (personalOnly) query = query.eq("is_personal", true);
+  // foods.user_id is null for the shared catalogue — RLS's admin bypass
+  // otherwise returns every member's personal foods to the admin's own
+  // session, not just their own, so this has to be explicit rather than
+  // left to RLS alone.
+  query = personalOnly ? query.eq("is_personal", true).eq("user_id", user.id) : query.or(`user_id.is.null,user_id.eq.${user.id}`);
   if (indianOnly) query = query.eq("is_indian_food", true);
   if (q) {
     const normalized = normalizeFoodName(q);

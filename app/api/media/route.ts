@@ -6,7 +6,7 @@ const BUCKET = "media";
 const SIGNED_URL_TTL_SECONDS = 3600;
 
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const contentWorthy = searchParams.get("content_worthy");
   const tag = searchParams.get("tag");
 
-  let query = supabase.from("media").select("*").order("uploaded_at", { ascending: false });
+  let query = supabase.from("media").select("*").eq("user_id", user.id).order("uploaded_at", { ascending: false });
   if (tripId) query = query.eq("trip_id", tripId);
   if (contentWorthy !== null) query = query.eq("content_worthy", contentWorthy === "true");
   if (tag) query = query.contains("tags", [tag]);

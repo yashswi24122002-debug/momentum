@@ -7,7 +7,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -25,7 +25,7 @@ export async function PATCH(
   if (typeof body.next_action === "string") updates.next_action = body.next_action;
   if (body.next_action_date !== undefined) updates.next_action_date = body.next_action_date;
 
-  const { data, error } = await supabase.from("applications").update(updates).eq("id", id).select().single();
+  const { data, error } = await supabase.from("applications").update(updates).eq("id", id).eq("user_id", user.id).select().single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

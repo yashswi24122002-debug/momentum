@@ -3,12 +3,13 @@ import { requireUser } from "@/lib/supabase/route-guard";
 import { computeRecipeNutrition } from "@/lib/calories/recipe-nutrition";
 
 export async function GET() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { data, error } = await supabase
     .from("recipes")
     .select("*, recipe_ingredients(*, foods(id, name, kcal_per_100g, protein_g_per_100g, carbs_g_per_100g, fat_g_per_100g))")
+    .eq("user_id", user.id)
     .order("name");
 
   if (error) {

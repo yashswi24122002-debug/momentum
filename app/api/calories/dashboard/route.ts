@@ -6,15 +6,20 @@ import { MEAL_TYPE_ORDER } from "@/lib/calories/ui";
 import type { FoodLogItem, MealType } from "@/lib/types/calories";
 
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date") ?? todayLocalISODate();
 
   const [{ data: settings }, { data: logs, error: logsError }] = await Promise.all([
-    supabase.from("calorie_settings").select("*").maybeSingle(),
-    supabase.from("food_logs").select("*, food_log_items(*)").eq("logged_on", date).order("logged_at", { ascending: true }),
+    supabase.from("calorie_settings").select("*").eq("user_id", user.id).maybeSingle(),
+    supabase
+      .from("food_logs")
+      .select("*, food_log_items(*)")
+      .eq("user_id", user.id)
+      .eq("logged_on", date)
+      .order("logged_at", { ascending: true }),
   ]);
 
   if (logsError) {

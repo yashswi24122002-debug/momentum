@@ -15,7 +15,7 @@ function resolveWeekStart(candidate: string | null): string {
 }
 
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const weekStart = resolveWeekStart(new URL(request.url).searchParams.get("week_start"));
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase
     .from("weekly_todos")
     .select("*")
+    .eq("user_id", user.id)
     .eq("week_start_date", weekStart)
     .maybeSingle();
 
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
@@ -49,11 +50,12 @@ export async function POST(request: NextRequest) {
     .from("weekly_todos")
     .upsert(
       {
+        user_id: user.id,
         week_start_date: weekStart,
         ...(top_priority !== undefined && { top_priority }),
         ...(top_3_tasks !== undefined && { top_3_tasks }),
       },
-      { onConflict: "week_start_date" }
+      { onConflict: "user_id,week_start_date" }
     )
     .select()
     .single();
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
@@ -85,8 +87,8 @@ export async function PATCH(request: NextRequest) {
   const { data, error } = await supabase
     .from("weekly_todos")
     .upsert(
-      { week_start_date: weekStart, ...updates },
-      { onConflict: "week_start_date" }
+      { user_id: user.id, week_start_date: weekStart, ...updates },
+      { onConflict: "user_id,week_start_date" }
     )
     .select()
     .single();

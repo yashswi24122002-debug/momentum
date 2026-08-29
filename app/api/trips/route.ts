@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 
 export async function GET() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
-  const { data, error } = await supabase.from("trips").select("*").order("start_date", { ascending: false });
+  const { data, error } = await supabase.from("trips").select("*").eq("user_id", user.id).order("start_date", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

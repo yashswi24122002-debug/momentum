@@ -3,12 +3,13 @@ import { requireUser } from "@/lib/supabase/route-guard";
 import { isValidFrequencyDays } from "@/lib/habits/schedule";
 
 export async function GET() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { data, error } = await supabase
     .from("habits")
     .select("*")
+    .eq("user_id", user.id)
     .eq("active", true)
     .order("sort_order", { ascending: true });
 
@@ -20,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
   const { data: maxSortRow } = await supabase
     .from("habits")
     .select("sort_order")
+    .eq("user_id", user.id)
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();

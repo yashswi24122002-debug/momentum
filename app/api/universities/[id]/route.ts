@@ -7,7 +7,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -33,7 +33,7 @@ export async function PATCH(
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
-  const { data, error } = await supabase.from("universities").update(updates).eq("id", id).select().single();
+  const { data, error } = await supabase.from("universities").update(updates).eq("id", id).eq("user_id", user.id).select().single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -49,11 +49,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
-  const { error } = await supabase.from("universities").delete().eq("id", id);
+  const { error } = await supabase.from("universities").delete().eq("id", id).eq("user_id", user.id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

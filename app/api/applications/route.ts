@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 
 export async function GET() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { data, error } = await supabase
     .from("applications")
     .select("*, job_postings(company, role_title, url)")
+    .eq("user_id", user.id)
     .order("updated_at", { ascending: false });
 
   if (error) {

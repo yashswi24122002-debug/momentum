@@ -7,7 +7,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -16,6 +16,7 @@ export async function GET(
     .from("content_ideas")
     .select("*, content_reports(*)")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single();
 
   if (error) {
@@ -26,6 +27,7 @@ export async function GET(
   const { data: matchedMedia } = await supabase
     .from("media")
     .select("*")
+    .eq("user_id", user.id)
     .in("id", data.matched_media_ids ?? []);
 
   const mediaWithUrls = await Promise.all(
@@ -44,11 +46,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
-  const { error } = await supabase.from("content_ideas").delete().eq("id", id);
+  const { error } = await supabase.from("content_ideas").delete().eq("id", id).eq("user_id", user.id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

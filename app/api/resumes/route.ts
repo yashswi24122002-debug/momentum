@@ -9,10 +9,10 @@ const SIGNED_URL_TTL_SECONDS = 3600;
 // Not in the PRD's route table, but draft-outreach's resume picker and any
 // resume-management UI need a way to list what's on file.
 export async function GET() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
-  const { data, error } = await supabase.from("resumes").select("*").order("name");
+  const { data, error } = await supabase.from("resumes").select("*").eq("user_id", user.id).order("name");
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

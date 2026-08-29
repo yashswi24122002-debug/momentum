@@ -5,14 +5,18 @@ import { DEFAULT_TASK_TEMPLATE } from "@/lib/masters-abroad/task-template";
 const VALID_CATEGORIES = ["documents", "exams", "financial", "visa", "application", "language"];
 
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category");
   const universityId = searchParams.get("university_id");
 
-  let query = supabase.from("tasks").select("*").order("deadline", { ascending: true, nullsFirst: false });
+  let query = supabase
+    .from("tasks")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("deadline", { ascending: true, nullsFirst: false });
   if (category) query = query.eq("category", category);
   if (universityId) query = query.eq("university_id", universityId);
 
@@ -25,11 +29,12 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ tasks: data });
 }
 
-async function seedDefaultTemplate(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"]) {
-  // Idempotent — don't double-seed if universal tasks already exist.
+async function seedDefaultTemplate(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], userId: string) {
+  // Idempotent — don't double-seed if this user's universal tasks already exist.
   const { count } = await supabase
     .from("tasks")
     .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
     .is("university_id", null);
   if (count && count > 0) {
     return { error: "Default tasks already seeded" as const };
@@ -59,17 +64,17 @@ async function seedDefaultTemplate(supabase: Awaited<ReturnType<typeof requireUs
 }
 
 export async function POST(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
 
   if (body.action === "seed_default") {
-    const result = await seedDefaultTemplate(supabase);
+    const result = await seedDefaultTemplate(supabase, user.id);
     if (result.error) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
-    const { data } = await supabase.from("tasks").select("*").is("university_id", null);
+    const { data } = await supabase.from("tasks").select("*").eq("user_id", user.id).is("university_id", null);
     return NextResponse.json({ tasks: data }, { status: 201 });
   }
 

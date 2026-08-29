@@ -83,6 +83,7 @@ export async function POST(
     .from("ideas")
     .select("*")
     .eq("id", id)
+    .eq("user_id", user.id)
     .single();
 
   if (fetchError || !idea) {
@@ -111,7 +112,7 @@ export async function POST(
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  const { error: updateError } = await supabase.from("ideas").update({ status: "approved" }).eq("id", id);
+  const { error: updateError } = await supabase.from("ideas").update({ status: "approved" }).eq("id", id).eq("user_id", user.id);
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }

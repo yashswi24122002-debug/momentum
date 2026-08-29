@@ -9,7 +9,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -24,8 +24,8 @@ export async function PATCH(
     // PRD acceptance criteria: a task with unmet dependencies can't be
     // marked done — enforced server-side too, not just in the UI.
     if (body.status === "done") {
-      const { data: current } = await supabase.from("tasks").select("depends_on").eq("id", id).single();
-      const { data: allTasks } = await supabase.from("tasks").select("*");
+      const { data: current } = await supabase.from("tasks").select("depends_on").eq("id", id).eq("user_id", user.id).single();
+      const { data: allTasks } = await supabase.from("tasks").select("*").eq("user_id", user.id);
       if (current && allTasks && isTaskBlocked(current, allTasks as Task[])) {
         return NextResponse.json(
           { error: "This task has unfinished dependencies and can't be marked done yet." },
@@ -49,7 +49,7 @@ export async function PATCH(
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
-  const { data, error } = await supabase.from("tasks").update(updates).eq("id", id).select().single();
+  const { data, error } = await supabase.from("tasks").update(updates).eq("id", id).eq("user_id", user.id).select().single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

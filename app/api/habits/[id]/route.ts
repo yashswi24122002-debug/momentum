@@ -6,7 +6,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -36,6 +36,7 @@ export async function PATCH(
     .from("habits")
     .update(updates)
     .eq("id", id)
+    .eq("user_id", user.id)
     .select()
     .single();
 
@@ -53,7 +54,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
@@ -62,6 +63,7 @@ export async function DELETE(
     .from("habits")
     .update({ active: false, archived_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("user_id", user.id)
     .select()
     .single();
 

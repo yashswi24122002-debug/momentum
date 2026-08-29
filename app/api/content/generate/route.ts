@@ -201,14 +201,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { data: trips } = await supabase.from("trips").select("id, name, location_summary");
+  const { data: trips } = await supabase.from("trips").select("id, name, location_summary").eq("user_id", user.id);
   const { data: contentWorthyMedia } = await supabase
     .from("media")
     .select("id, trip_id")
+    .eq("user_id", user.id)
     .eq("content_worthy", true);
   const { data: recentIdeas } = await supabase
     .from("content_ideas")
     .select("title")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(RECENT_TITLES_LIMIT);
 

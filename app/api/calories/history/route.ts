@@ -7,7 +7,7 @@ import type { FoodLogItem } from "@/lib/types/calories";
 const DEFAULT_DAYS = 30;
 
 export async function GET(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
@@ -16,10 +16,11 @@ export async function GET(request: NextRequest) {
   const from = addDays(to, -(days - 1));
 
   const [{ data: settings }, { data: logs, error }] = await Promise.all([
-    supabase.from("calorie_settings").select("daily_calorie_goal").maybeSingle(),
+    supabase.from("calorie_settings").select("daily_calorie_goal").eq("user_id", user.id).maybeSingle(),
     supabase
       .from("food_logs")
       .select("logged_on, food_log_items(*)")
+      .eq("user_id", user.id)
       .gte("logged_on", from)
       .lte("logged_on", to),
   ]);
