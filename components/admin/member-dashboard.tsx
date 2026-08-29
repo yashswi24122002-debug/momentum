@@ -13,6 +13,7 @@ import type { Habit, HabitLog } from "@/lib/types/habits";
 import type { Idea } from "@/lib/types/ideas";
 import type { ContentIdea } from "@/lib/types/content";
 import type { University, Task } from "@/lib/types/masters-abroad";
+import type { ToolKey } from "@/lib/types/admin";
 import { LayoutGrid } from "lucide-react";
 
 type OutreachRow = {
@@ -24,6 +25,7 @@ type OutreachRow = {
 };
 
 type MemberData = {
+  enabledTools: ToolKey[];
   habits: Habit[];
   habitLogs: HabitLog[];
   ideas: Idea[];
@@ -110,112 +112,140 @@ export function MemberDashboardContent({ userId }: { userId: string }) {
     );
   }
 
+  const enabled = new Set(data.enabledTools);
+
+  if (enabled.size === 0) {
+    return (
+      <EmptyState
+        icon={LayoutGrid}
+        title="No tools enabled yet"
+        description="Turn on a tool for this member to see their data here."
+      />
+    );
+  }
+
+  const hasMastersAbroad = enabled.has("masters_abroad");
+
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <Card className="border-border bg-surface">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
-            <LayoutGrid className="size-3.5" />
-            Habits
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.habits.length === 0 ? (
-            <EmptyState icon={LayoutGrid} title="No habits yet" description="This member hasn't added any habits." />
-          ) : (
-            <HabitDashboard preloadedHabits={data.habits} preloadedLogs={data.habitLogs} />
-          )}
-        </CardContent>
-      </Card>
+      {enabled.has("habits") && (
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
+              <LayoutGrid className="size-3.5" />
+              Habits
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.habits.length === 0 ? (
+              <EmptyState icon={LayoutGrid} title="No habits yet" description="This member hasn't added any habits." />
+            ) : (
+              <HabitDashboard preloadedHabits={data.habits} preloadedLogs={data.habitLogs} compact />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="border-border bg-surface">
-          <CardHeader>
-            <CardTitle className="text-sm text-text-secondary">Ideas ({data.ideas.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GroupedList
-              emptyLabel="No ideas generated yet."
-              items={data.ideas}
-              renderTitle={(i) => i.title}
-              renderMeta={(i) => `${i.category} · ${i.effort_estimate} · ${i.date_generated}`}
-            />
-          </CardContent>
-        </Card>
+        {enabled.has("ideas") && (
+          <Card className="border-border bg-surface">
+            <CardHeader>
+              <CardTitle className="text-sm text-text-secondary">Ideas ({data.ideas.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GroupedList
+                emptyLabel="No ideas generated yet."
+                items={data.ideas}
+                renderTitle={(i) => i.title}
+                renderMeta={(i) => `${i.category} · ${i.effort_estimate} · ${i.date_generated}`}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-        <Card className="border-border bg-surface">
-          <CardHeader>
-            <CardTitle className="text-sm text-text-secondary">Content ideas ({data.content.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GroupedList
-              emptyLabel="No content ideas generated yet."
-              items={data.content}
-              renderTitle={(i) => i.title}
-              renderMeta={(i) => `${i.format} · ${i.date_generated}`}
-            />
-          </CardContent>
-        </Card>
+        {enabled.has("content") && (
+          <Card className="border-border bg-surface">
+            <CardHeader>
+              <CardTitle className="text-sm text-text-secondary">Content ideas ({data.content.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GroupedList
+                emptyLabel="No content ideas generated yet."
+                items={data.content}
+                renderTitle={(i) => i.title}
+                renderMeta={(i) => `${i.format} · ${i.date_generated}`}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-        <Card className="border-border bg-surface">
-          <CardHeader>
-            <CardTitle className="text-sm text-text-secondary">Universities ({data.universities.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GroupedList
-              emptyLabel="No universities added yet."
-              items={data.universities}
-              renderTitle={(u) => u.name}
-              renderMeta={(u) => [u.program_name, u.city].filter(Boolean).join(" · ") || "—"}
-            />
-          </CardContent>
-        </Card>
+        {hasMastersAbroad && (
+          <Card className="border-border bg-surface">
+            <CardHeader>
+              <CardTitle className="text-sm text-text-secondary">Universities ({data.universities.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GroupedList
+                emptyLabel="No universities added yet."
+                items={data.universities}
+                renderTitle={(u) => u.name}
+                renderMeta={(u) => [u.program_name, u.city].filter(Boolean).join(" · ") || "—"}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-        <Card className="border-border bg-surface">
-          <CardHeader>
-            <CardTitle className="text-sm text-text-secondary">Masters tasks ({data.tasks.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GroupedList
-              emptyLabel="No tasks yet."
-              items={data.tasks}
-              renderTitle={(t) => t.title}
-              renderMeta={(t) => [t.category, t.deadline].filter(Boolean).join(" · ") || "No deadline"}
-            />
-          </CardContent>
-        </Card>
+        {hasMastersAbroad && (
+          <Card className="border-border bg-surface">
+            <CardHeader>
+              <CardTitle className="text-sm text-text-secondary">Masters tasks ({data.tasks.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GroupedList
+                emptyLabel="No tasks yet."
+                items={data.tasks}
+                renderTitle={(t) => t.title}
+                renderMeta={(t) => [t.category, t.deadline].filter(Boolean).join(" · ") || "No deadline"}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-        <Card className="border-border bg-surface">
-          <CardHeader>
-            <CardTitle className="text-sm text-text-secondary">Job outreach ({data.outreach.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GroupedList
-              emptyLabel="No outreach drafted yet."
-              items={data.outreach}
-              renderTitle={(o) => (o.job_postings ? `${o.job_postings.role_title} @ ${o.job_postings.company}` : "Unknown posting")}
-              renderMeta={(o) => (o.sent_at ? `Sent ${o.sent_at.slice(0, 10)}` : `Created ${o.created_at.slice(0, 10)}`)}
-            />
-          </CardContent>
-        </Card>
+        {enabled.has("jobs") && (
+          <Card className="border-border bg-surface">
+            <CardHeader>
+              <CardTitle className="text-sm text-text-secondary">Job outreach ({data.outreach.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GroupedList
+                emptyLabel="No outreach drafted yet."
+                items={data.outreach}
+                renderTitle={(o) => (o.job_postings ? `${o.job_postings.role_title} @ ${o.job_postings.company}` : "Unknown posting")}
+                renderMeta={(o) => (o.sent_at ? `Sent ${o.sent_at.slice(0, 10)}` : `Created ${o.created_at.slice(0, 10)}`)}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-        <Card className="border-border bg-surface">
-          <CardHeader>
-            <CardTitle className="text-sm text-text-secondary">Calorie tracking</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-text-secondary">Logs</span>
-              <span className="text-text-primary">
-                {data.calories.totalLogs} entries over {data.calories.distinctDays} days
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-text-secondary">Daily goal</span>
-              <span className="text-text-primary">{data.calories.dailyGoal ? `${data.calories.dailyGoal} kcal` : "Not set"}</span>
-            </div>
-          </CardContent>
-        </Card>
+        {enabled.has("calories") && (
+          <Card className="border-border bg-surface">
+            <CardHeader>
+              <CardTitle className="text-sm text-text-secondary">Calorie tracking</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-text-secondary">Logs</span>
+                <span className="text-text-primary">
+                  {data.calories.totalLogs} entries over {data.calories.distinctDays} days
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-text-secondary">Daily goal</span>
+                <span className="text-text-primary">{data.calories.dailyGoal ? `${data.calories.dailyGoal} kcal` : "Not set"}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -18,19 +18,39 @@ export async function GET(
 
   const { id } = await params;
 
+  // Only show a tool's data at all if the admin has actually enabled it for
+  // this member — a disabled tool's stats aren't relevant to "what is this
+  // member doing right now" and shouldn't leak through the dashboard.
+  const { data: toolAccess } = await supabase.from("tool_access").select("tool_key, enabled").eq("user_id", id);
+  const enabledTools = new Set((toolAccess ?? []).filter((t) => t.enabled).map((t) => t.tool_key));
+
   const [habits, ideas, contentIdeas, universities, tasks, outreach, foodLogs, calorieSettings] = await Promise.all([
-    supabase.from("habits").select("*").eq("user_id", id).order("sort_order"),
-    supabase.from("ideas").select("*").eq("user_id", id).order("date_generated", { ascending: false }),
-    supabase.from("content_ideas").select("*").eq("user_id", id).order("date_generated", { ascending: false }),
-    supabase.from("universities").select("*").eq("user_id", id).order("created_at", { ascending: false }),
-    supabase.from("tasks").select("*").eq("user_id", id).order("created_at", { ascending: false }),
-    supabase
-      .from("outreach")
-      .select("id, status, sent_at, created_at, job_postings(company, role_title)")
-      .eq("user_id", id)
-      .order("created_at", { ascending: false }),
-    supabase.from("food_logs").select("id, logged_on").eq("user_id", id),
-    supabase.from("calorie_settings").select("daily_calorie_goal").eq("user_id", id).maybeSingle(),
+    enabledTools.has("habits")
+      ? supabase.from("habits").select("*").eq("user_id", id).order("sort_order")
+      : { data: [] },
+    enabledTools.has("ideas")
+      ? supabase.from("ideas").select("*").eq("user_id", id).order("date_generated", { ascending: false })
+      : { data: [] },
+    enabledTools.has("content")
+      ? supabase.from("content_ideas").select("*").eq("user_id", id).order("date_generated", { ascending: false })
+      : { data: [] },
+    enabledTools.has("masters_abroad")
+      ? supabase.from("universities").select("*").eq("user_id", id).order("created_at", { ascending: false })
+      : { data: [] },
+    enabledTools.has("masters_abroad")
+      ? supabase.from("tasks").select("*").eq("user_id", id).order("created_at", { ascending: false })
+      : { data: [] },
+    enabledTools.has("jobs")
+      ? supabase
+          .from("outreach")
+          .select("id, status, sent_at, created_at, job_postings(company, role_title)")
+          .eq("user_id", id)
+          .order("created_at", { ascending: false })
+      : { data: [] },
+    enabledTools.has("calories") ? supabase.from("food_logs").select("id, logged_on").eq("user_id", id) : { data: [] },
+    enabledTools.has("calories")
+      ? supabase.from("calorie_settings").select("daily_calorie_goal").eq("user_id", id).maybeSingle()
+      : { data: null },
   ]);
 
   // habit_logs has no user_id of its own (Phase 2 §5 Group B — ownership is
@@ -43,13 +63,8 @@ export async function GET(
     ? await supabase.from("habit_logs").select("*").in("habit_id", habitIds)
     : { data: [] };
 
-  function countBy<T extends string>(rows: { status: T }[] | null): Record<string, number> {
-    const counts: Record<string, number> = {};
-    for (const row of rows ?? []) counts[row.status] = (counts[row.status] ?? 0) + 1;
-    return counts;
-  }
-
   return NextResponse.json({
+    enabledTools: Array.from(enabledTools),
     habits: habits.data ?? [],
     habitLogs: habitLogs ?? [],
     ideas: ideas.data ?? [],
@@ -57,13 +72,6 @@ export async function GET(
     universities: universities.data ?? [],
     tasks: tasks.data ?? [],
     outreach: outreach.data ?? [],
-    summary: {
-      ideas: countBy(ideas.data),
-      content: countBy(contentIdeas.data),
-      universities: countBy(universities.data),
-      tasks: countBy(tasks.data),
-      outreach: countBy(outreach.data),
-    },
     calories: {
       totalLogs: foodLogs.data?.length ?? 0,
       distinctDays: new Set((foodLogs.data ?? []).map((f) => f.logged_on)).size,
