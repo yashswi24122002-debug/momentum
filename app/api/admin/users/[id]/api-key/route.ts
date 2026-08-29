@@ -21,8 +21,17 @@ export async function PATCH(
     return NextResponse.json({ error: "api_key is required" }, { status: 400 });
   }
 
+  let encrypted: string;
+  try {
+    encrypted = encryptApiKey(api_key.trim());
+  } catch (error) {
+    // Most likely API_KEY_ENCRYPTION_SECRET isn't set in this environment —
+    // surfaced as a real message instead of a bare framework 500.
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Couldn't encrypt that key" }, { status: 500 });
+  }
+
   const { error } = await supabase.from("user_api_keys").upsert(
-    { user_id: id, provider: "gemini", api_key_encrypted: encryptApiKey(api_key.trim()), updated_at: new Date().toISOString() },
+    { user_id: id, provider: "gemini", api_key_encrypted: encrypted, updated_at: new Date().toISOString() },
     { onConflict: "user_id,provider" }
   );
 

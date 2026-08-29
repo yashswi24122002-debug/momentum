@@ -7,6 +7,7 @@ import { ArrowLeft, Key, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -143,7 +144,8 @@ export function EditUser({ userId }: { userId: string }) {
     });
     setSaving(false);
     if (!res.ok) {
-      toast.error("Couldn't save the API key — try again.");
+      const { error } = await res.json().catch(() => ({ error: "Couldn't save the API key — try again." }));
+      toast.error(error);
       return;
     }
     setApiKey("");
@@ -252,7 +254,7 @@ export function EditUser({ userId }: { userId: string }) {
             {detail.hasApiKey ? "Key on file — this member's AI usage runs on their own key." : "No key set — this member's AI features are blocked until one is added."}
           </p>
           <div className="flex gap-2">
-            <Input type="password" placeholder="Paste their Gemini API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <PasswordInput placeholder="Paste their Gemini API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
             <Button size="sm" onClick={saveApiKey} disabled={saving}>
               Save
             </Button>
