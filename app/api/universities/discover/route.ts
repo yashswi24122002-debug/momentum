@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   let apiKey: string;
   try {
     apiKey = await resolveGeminiApiKey(user.id, isAdmin);
-    await checkAndIncrementUsage(supabase, user.id, "masters_discover", isAdmin);
+    await checkAndIncrementUsage(supabase, user.id, "masters_discover", isAdmin, SUGGESTION_COUNT);
   } catch (error) {
     if (error instanceof NoApiKeyError || error instanceof UsageLimitExceededError) {
       return NextResponse.json({ error: error.message }, { status: error instanceof UsageLimitExceededError ? 429 : 403 });
