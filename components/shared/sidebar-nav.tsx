@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS, type NavItem } from "@/components/shared/nav-items";
+import { visibleNavItems, type NavItem } from "@/components/shared/nav-items";
 import { LogoutButton } from "@/components/shared/logout-button";
+import type { ToolKey } from "@/lib/types/admin";
 
 function NavLink({
   href,
@@ -108,9 +109,17 @@ function NavGroup({
 }
 
 /** Shared nav tree, used inside the desktop sidebar and the mobile drawer. */
-export function NavContent({ onNavigate, isAdmin = false }: { onNavigate?: () => void; isAdmin?: boolean }) {
+export function NavContent({
+  onNavigate,
+  isAdmin = false,
+  enabledTools = [],
+}: {
+  onNavigate?: () => void;
+  isAdmin?: boolean;
+  enabledTools?: ToolKey[];
+}) {
   const pathname = usePathname();
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const items = visibleNavItems(isAdmin, enabledTools);
 
   return (
     <div className="flex h-full flex-col">
@@ -140,10 +149,10 @@ export function NavContent({ onNavigate, isAdmin = false }: { onNavigate?: () =>
   );
 }
 
-export function SidebarNav({ isAdmin = false }: { isAdmin?: boolean }) {
+export function SidebarNav({ isAdmin = false, enabledTools = [] }: { isAdmin?: boolean; enabledTools?: ToolKey[] }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-50 hidden w-56 flex-col border-r border-border bg-background md:flex">
-      <NavContent isAdmin={isAdmin} />
+      <NavContent isAdmin={isAdmin} enabledTools={enabledTools} />
     </aside>
   );
 }

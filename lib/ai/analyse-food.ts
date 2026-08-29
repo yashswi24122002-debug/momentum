@@ -7,12 +7,6 @@ import { z } from "zod";
 // (text + inlineData image part), the text helper never needs to.
 const MODEL = "gemini-3.6-flash";
 
-let client: GoogleGenAI | null = null;
-function getClient(): GoogleGenAI {
-  if (!client) client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  return client;
-}
-
 export class AnalysePhotoError extends Error {}
 
 // Matches 08-Calorie-Tracker-PRD.md §11's required response shape exactly.
@@ -63,11 +57,12 @@ Set overallConfidence as a realistic average across your item confidences, not t
  * draft — never persists anything itself (PRD §11: "nothing persists until
  * ... the user presses Save").
  */
-export async function analysePhoto(imageBase64: string, mimeType: string): Promise<PhotoAnalysisResult> {
+export async function analysePhoto(apiKey: string, imageBase64: string, mimeType: string): Promise<PhotoAnalysisResult> {
+  const client = new GoogleGenAI({ apiKey });
   const jsonSchema = z.toJSONSchema(PhotoAnalysisSchema);
 
   async function attempt(): Promise<PhotoAnalysisResult> {
-    const response = await getClient().models.generateContent({
+    const response = await client.models.generateContent({
       model: MODEL,
       contents: [PROMPT, { inlineData: { data: imageBase64, mimeType } }],
       config: {

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/supabase/route-guard";
+import { checkIsAdmin } from "@/lib/supabase/admin-guard";
+import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
+import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
 import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
 import { findContactsForDomain, guessDomain, domainFromUrl, type HunterContact } from "@/lib/integrations/hunter";
 import { logError } from "@/lib/errors/log-error";
@@ -40,8 +43,20 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
+
+  const isAdmin = await checkIsAdmin(supabase, user);
+  let apiKey: string;
+  try {
+    apiKey = await resolveGeminiApiKey(user.id, isAdmin);
+    await checkAndIncrementUsage(supabase, user.id, "jobs_draft_outreach", isAdmin);
+  } catch (error) {
+    if (error instanceof NoApiKeyError || error instanceof UsageLimitExceededError) {
+      return NextResponse.json({ error: error.message }, { status: error instanceof UsageLimitExceededError ? 429 : 403 });
+    }
+    throw error;
+  }
 
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
@@ -78,7 +93,7 @@ export async function POST(
 
   let draft: z.infer<typeof DraftSchema>;
   try {
-    draft = await generateContent(buildPrompt(job, resume, contact?.firstName ?? null), DraftSchema);
+    draft = await generateContent(apiKey, buildPrompt(job, resume, contact?.firstName ?? null), DraftSchema);
   } catch (error) {
     await logError(supabase, "jobs/draft-outreach", error instanceof Error ? error.message : String(error), { jobId: id });
     const message =

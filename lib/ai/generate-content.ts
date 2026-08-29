@@ -8,24 +8,24 @@ import { z } from "zod";
 // working directly against this project's key.
 const MODEL = "gemini-3.6-flash";
 
-let client: GoogleGenAI | null = null;
-function getClient(): GoogleGenAI {
-  if (!client) client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  return client;
-}
-
 export class GenerateContentError extends Error {}
 
 /**
  * Calls Gemini with structured JSON output validated against `schema`.
  * Retries once on a malformed/invalid response, then throws rather than
  * ever returning or persisting unvalidated data (Master PRD §5).
+ *
+ * `apiKey` is resolved per-caller (09-Admin-Access-Control-PRD.md §9) —
+ * the admin's own env key, or a member's own key via
+ * lib/admin/resolve-api-key.ts — never a module-level singleton, since
+ * which key applies depends on who's calling.
  */
-export async function generateContent<T>(prompt: string, schema: z.ZodType<T>): Promise<T> {
+export async function generateContent<T>(apiKey: string, prompt: string, schema: z.ZodType<T>): Promise<T> {
+  const client = new GoogleGenAI({ apiKey });
   const jsonSchema = z.toJSONSchema(schema);
 
   async function attempt(): Promise<T> {
-    const response = await getClient().models.generateContent({
+    const response = await client.models.generateContent({
       model: MODEL,
       contents: prompt,
       config: {

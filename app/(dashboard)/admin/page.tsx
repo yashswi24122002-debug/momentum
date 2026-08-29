@@ -1,5 +1,7 @@
-import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { getAdminProfile } from "@/lib/supabase/admin-guard";
 
 export default async function AdminPage() {
@@ -9,15 +11,12 @@ export default async function AdminPage() {
     <div className="flex flex-1 flex-col gap-6">
       <h1 className="text-xl font-semibold text-text-primary">Admin</h1>
 
-      <Card className="max-w-md gap-2 border-border bg-surface p-5">
-        <div className="flex items-center gap-2 text-primary">
-          <ShieldCheck className="size-5" />
-          <span className="text-sm font-medium">Admin access confirmed</span>
-        </div>
+      <Card className="max-w-md gap-3 border-border bg-surface p-5">
         <p className="text-sm text-text-secondary">Signed in as {profile?.email}.</p>
-        <p className="text-xs text-text-muted">
-          User management, per-tool access, usage limits, and per-user Gemini API keys are coming in the next phases.
-        </p>
+        <Button render={<Link href="/admin/users" />} nativeButton={false} className="w-fit">
+          <Users className="size-4" />
+          Manage users
+        </Button>
       </Card>
     </div>
   );

@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS } from "@/components/shared/nav-items";
+import { visibleNavItems } from "@/components/shared/nav-items";
+import type { ToolKey } from "@/lib/types/admin";
 
-export function BottomTabBar({ isAdmin = false }: { isAdmin?: boolean }) {
+export function BottomTabBar({ isAdmin = false, enabledTools = [] }: { isAdmin?: boolean; enabledTools?: ToolKey[] }) {
   const pathname = usePathname();
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const items = visibleNavItems(isAdmin, enabledTools);
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">

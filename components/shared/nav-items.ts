@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import type { ToolKey } from "@/lib/types/admin";
 
 export type NavChild = {
   label: string;
@@ -33,6 +34,8 @@ export type NavItem = {
   children?: NavChild[];
   /** Only ever rendered for the admin — real enforcement is server-side (lib/supabase/admin-guard.ts), this just keeps it out of a member's UI. */
   adminOnly?: boolean;
+  /** Which tool_access row gates this group for a member — omitted for non-tool items (Admin). Real enforcement is the middleware (lib/admin/tool-routes.ts); this just keeps a disabled tool out of a member's nav. */
+  toolKey?: ToolKey;
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -40,6 +43,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Habits",
     href: "/habits",
     icon: CheckSquare,
+    toolKey: "habits",
     children: [
       { label: "Today", href: "/habits", icon: CheckSquare },
       { label: "Manage", href: "/habits/manage", icon: ListChecks },
@@ -51,6 +55,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Ideas",
     href: "/ideas",
     icon: Lightbulb,
+    toolKey: "ideas",
     children: [
       { label: "Today", href: "/ideas", icon: Lightbulb },
       { label: "History", href: "/ideas/history", icon: History },
@@ -60,6 +65,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Content",
     href: "/content",
     icon: Camera,
+    toolKey: "content",
     children: [
       { label: "Today", href: "/content", icon: Camera },
       { label: "History", href: "/content/history", icon: History },
@@ -70,6 +76,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Masters",
     href: "/masters-abroad",
     icon: GraduationCap,
+    toolKey: "masters_abroad",
     children: [
       { label: "Dashboard", href: "/masters-abroad", icon: GraduationCap },
       { label: "Universities", href: "/masters-abroad/universities", icon: Landmark },
@@ -82,6 +89,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Jobs",
     href: "/jobs",
     icon: Briefcase,
+    toolKey: "jobs",
     children: [
       { label: "Feed", href: "/jobs", icon: Briefcase },
       { label: "Outreach Queue", href: "/jobs/outreach-queue", icon: Send },
@@ -93,6 +101,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Calories",
     href: "/calories",
     icon: Flame,
+    toolKey: "calories",
     children: [
       { label: "Today", href: "/calories", icon: Flame },
       { label: "Log Food", href: "/calories/log", icon: ScanBarcode },
@@ -109,3 +118,13 @@ export const NAV_ITEMS: NavItem[] = [
     adminOnly: true,
   },
 ];
+
+/** Shared filter used by every nav surface (sidebar, mobile drawer, bottom tab bar) — cosmetic only, real enforcement is the middleware (lib/admin/tool-routes.ts). */
+export function visibleNavItems(isAdmin: boolean, enabledTools: ToolKey[]): NavItem[] {
+  return NAV_ITEMS.filter((item) => {
+    if (item.adminOnly) return isAdmin;
+    if (isAdmin) return true;
+    if (!item.toolKey) return true;
+    return enabledTools.includes(item.toolKey);
+  });
+}

@@ -1,0 +1,310 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Key, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { TOOL_ORDER, TOOL_LABELS, FEATURE_ORDER, FEATURE_LABELS } from "@/lib/admin/ui";
+import type { Profile, ToolKey, FeatureKey } from "@/lib/types/admin";
+
+type Detail = {
+  profile: Profile;
+  toolAccess: { tool_key: ToolKey; enabled: boolean }[];
+  limits: { feature_key: FeatureKey; daily_limit: number | null }[];
+  hasApiKey: boolean;
+};
+
+type DashboardStats = {
+  habits: { total: number; active: number };
+  ideas: Record<string, number>;
+  content: Record<string, number>;
+  universities: Record<string, number>;
+  tasks: Record<string, number>;
+  outreach: Record<string, number>;
+  calories: { totalLogs: number; distinctDays: number; dailyGoal: number | null };
+};
+
+function StatLine({ label, counts }: { label: string; counts: Record<string, number> }) {
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const breakdown = Object.entries(counts)
+    .map(([k, v]) => `${v} ${k}`)
+    .join(", ");
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-text-secondary">{label}</span>
+      <span className="text-text-primary">{total === 0 ? "None" : breakdown}</span>
+    </div>
+  );
+}
+
+export function EditUser({ userId }: { userId: string }) {
+  const router = useRouter();
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [tools, setTools] = useState<Record<ToolKey, boolean>>({} as Record<ToolKey, boolean>);
+  const [limits, setLimits] = useState<Record<FeatureKey, string>>({} as Record<FeatureKey, string>);
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      const [detailRes, statsRes] = await Promise.all([
+        fetch(`/api/admin/users/${userId}`),
+        fetch(`/api/admin/users/${userId}/dashboard`),
+      ]);
+      const detailJson = await detailRes.json();
+      const statsJson = await statsRes.json();
+      setDetail(detailJson);
+      setStats(statsJson);
+      setDisplayName(detailJson.profile?.display_name ?? "");
+
+      const toolMap = {} as Record<ToolKey, boolean>;
+      for (const t of TOOL_ORDER) toolMap[t] = detailJson.toolAccess?.find((a: { tool_key: ToolKey }) => a.tool_key === t)?.enabled ?? false;
+      setTools(toolMap);
+
+      const limitMap = {} as Record<FeatureKey, string>;
+      for (const f of FEATURE_ORDER) {
+        const row = detailJson.limits?.find((l: { feature_key: FeatureKey }) => l.feature_key === f);
+        limitMap[f] = row?.daily_limit === null || row?.daily_limit === undefined ? "" : String(row.daily_limit);
+      }
+      setLimits(limitMap);
+    }
+    load();
+  }, [userId]);
+
+  async function saveProfile() {
+    setSaving(true);
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ display_name: displayName }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      toast.error("Couldn't save — try again.");
+      return;
+    }
+    toast.success("Saved.");
+  }
+
+  async function saveTools() {
+    setSaving(true);
+    const res = await fetch(`/api/admin/users/${userId}/tool-access`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tools }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      toast.error("Couldn't save tool access — try again.");
+      return;
+    }
+    toast.success("Tool access updated.");
+  }
+
+  async function saveLimits() {
+    setSaving(true);
+    const payload: Record<FeatureKey, number | null> = {} as Record<FeatureKey, number | null>;
+    for (const f of FEATURE_ORDER) payload[f] = limits[f].trim() === "" ? null : Number(limits[f]);
+    const res = await fetch(`/api/admin/users/${userId}/limits`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limits: payload }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      toast.error("Couldn't save limits — try again.");
+      return;
+    }
+    toast.success("Usage limits updated.");
+  }
+
+  async function saveApiKey() {
+    if (!apiKey.trim()) {
+      toast.error("Enter a Gemini API key first.");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch(`/api/admin/users/${userId}/api-key`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      toast.error("Couldn't save the API key — try again.");
+      return;
+    }
+    setApiKey("");
+    setDetail((prev) => (prev ? { ...prev, hasApiKey: true } : prev));
+    toast.success("API key saved.");
+  }
+
+  async function removeApiKey() {
+    setSaving(true);
+    const res = await fetch(`/api/admin/users/${userId}/api-key`, { method: "DELETE" });
+    setSaving(false);
+    if (!res.ok) {
+      toast.error("Couldn't remove the API key — try again.");
+      return;
+    }
+    setDetail((prev) => (prev ? { ...prev, hasApiKey: false } : prev));
+    toast.success("API key removed.");
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const res = await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+    setDeleting(false);
+    if (!res.ok) {
+      toast.error("Couldn't delete this account — try again.");
+      return;
+    }
+    toast.success("Account deleted.");
+    router.push("/admin/users");
+  }
+
+  if (!detail || !stats) {
+    return <Skeleton className="h-96 w-full rounded-xl" />;
+  }
+
+  return (
+    <div className="flex flex-1 flex-col gap-6 pb-16">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" render={<Link href="/admin/users" />} nativeButton={false}>
+          <ArrowLeft className="size-4" />
+        </Button>
+        <h1 className="text-xl font-semibold text-text-primary">{detail.profile.display_name || detail.profile.email}</h1>
+      </div>
+
+      <Card className="max-w-md gap-3 border-border bg-surface p-5">
+        <div className="space-y-1.5">
+          <Label>Display name</Label>
+          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+        </div>
+        <Button size="sm" onClick={saveProfile} disabled={saving} className="w-fit">
+          Save name
+        </Button>
+      </Card>
+
+      <Card className="max-w-md gap-3 border-border bg-surface p-5">
+        <CardHeader className="p-0">
+          <CardTitle className="text-sm text-text-secondary">Tool access</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 p-0">
+          {TOOL_ORDER.map((tool) => (
+            <label key={tool} className="flex items-center gap-2 text-sm text-text-primary">
+              <Checkbox checked={tools[tool]} onCheckedChange={(checked) => setTools((prev) => ({ ...prev, [tool]: Boolean(checked) }))} />
+              {TOOL_LABELS[tool]}
+            </label>
+          ))}
+          <Button size="sm" onClick={saveTools} disabled={saving} className="mt-2 w-fit">
+            Save tool access
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-md gap-3 border-border bg-surface p-5">
+        <CardHeader className="p-0">
+          <CardTitle className="text-sm text-text-secondary">Daily AI usage limits</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 p-0">
+          {FEATURE_ORDER.map((feature) => (
+            <div key={feature} className="flex items-center justify-between gap-2">
+              <span className="text-sm text-text-primary">{FEATURE_LABELS[feature]}</span>
+              <Input
+                type="number"
+                min="0"
+                placeholder="Unlimited"
+                className="w-28"
+                value={limits[feature] ?? ""}
+                onChange={(e) => setLimits((prev) => ({ ...prev, [feature]: e.target.value }))}
+              />
+            </div>
+          ))}
+          <p className="text-xs text-text-muted">Leave blank for unlimited.</p>
+          <Button size="sm" onClick={saveLimits} disabled={saving} className="w-fit">
+            Save limits
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-md gap-3 border-border bg-surface p-5">
+        <CardHeader className="p-0">
+          <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
+            <Key className="size-3.5" />
+            Gemini API key
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 p-0">
+          <p className="text-xs text-text-muted">
+            {detail.hasApiKey ? "Key on file — this member's AI usage runs on their own key." : "No key set — this member's AI features are blocked until one is added."}
+          </p>
+          <div className="flex gap-2">
+            <Input type="password" placeholder="Paste their Gemini API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <Button size="sm" onClick={saveApiKey} disabled={saving}>
+              Save
+            </Button>
+          </div>
+          {detail.hasApiKey && (
+            <Button variant="outline" size="sm" onClick={removeApiKey} disabled={saving}>
+              Remove key
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-md gap-3 border-border bg-surface p-5">
+        <CardHeader className="p-0">
+          <CardTitle className="text-sm text-text-secondary">Activity (read-only)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 p-0">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-text-secondary">Habits</span>
+            <span className="text-text-primary">{stats.habits.active} active / {stats.habits.total} total</span>
+          </div>
+          <StatLine label="Ideas" counts={stats.ideas} />
+          <StatLine label="Content ideas" counts={stats.content} />
+          <StatLine label="Universities" counts={stats.universities} />
+          <StatLine label="Masters tasks" counts={stats.tasks} />
+          <StatLine label="Job outreach" counts={stats.outreach} />
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-text-secondary">Calorie logs</span>
+            <span className="text-text-primary">
+              {stats.calories.totalLogs} entries over {stats.calories.distinctDays} days
+              {stats.calories.dailyGoal ? ` · goal ${stats.calories.dailyGoal} kcal` : ""}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-md gap-2 border-danger/30 bg-surface p-5">
+        <CardTitle className="text-sm text-danger">Danger zone</CardTitle>
+        <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} className="w-fit">
+          <Trash2 className="size-3.5" />
+          Delete account
+        </Button>
+      </Card>
+
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={handleDelete}
+        deleting={deleting}
+        title={`Delete ${detail.profile.email}?`}
+        description="This permanently removes their account and every piece of data they created across every tool. This can't be undone."
+      />
+    </div>
+  );
+}

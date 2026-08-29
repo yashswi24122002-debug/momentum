@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/supabase/route-guard";
+import { checkIsAdmin } from "@/lib/supabase/admin-guard";
+import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
+import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
 import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
 import { fetchHackerNewsSignals } from "@/lib/integrations/hacker-news";
 import { fetchGitHubTrendingSignals } from "@/lib/integrations/github-trending";
@@ -57,8 +60,20 @@ ${signals.map((s) => `- ${s}`).join("\n")}`;
 }
 
 export async function POST() {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
+
+  const isAdmin = await checkIsAdmin(supabase, user);
+  let apiKey: string;
+  try {
+    apiKey = await resolveGeminiApiKey(user.id, isAdmin);
+    await checkAndIncrementUsage(supabase, user.id, "ideas_generate", isAdmin);
+  } catch (error) {
+    if (error instanceof NoApiKeyError || error instanceof UsageLimitExceededError) {
+      return NextResponse.json({ error: error.message }, { status: error instanceof UsageLimitExceededError ? 429 : 403 });
+    }
+    throw error;
+  }
 
   const results = await Promise.all([
     fetchHackerNewsSignals(),
@@ -86,7 +101,7 @@ export async function POST() {
 
   let ideas: z.infer<typeof IdeasResponseSchema>;
   try {
-    ideas = await generateContent(buildPrompt(signals), IdeasResponseSchema);
+    ideas = await generateContent(apiKey, buildPrompt(signals), IdeasResponseSchema);
   } catch (error) {
     await logError(supabase, "ideas/generate", error instanceof Error ? error.message : String(error));
     const message =

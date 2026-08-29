@@ -6,10 +6,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // API routes handle their own auth (session check for user-facing routes,
-  // CRON_SECRET for cron routes) — a redirect to /login would be the wrong
-  // response shape for a JSON caller, so they're excluded here.
+  // /api/* is now included (unlike before) — updateSession() itself
+  // returns JSON instead of redirecting for API paths, and skips
+  // /api/cron/* entirely (those authenticate via CRON_SECRET, not a user
+  // session). This is what lets tool-access and admin gating be enforced
+  // centrally for both pages and API routes, rather than edited into every
+  // individual route file.
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

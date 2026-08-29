@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/supabase/route-guard";
+import { checkIsAdmin } from "@/lib/supabase/admin-guard";
+import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
+import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
 import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 import { matchCuratedUniversity } from "@/lib/masters-abroad/curated-universities";
@@ -44,8 +47,20 @@ For each university, provide: name, program_name (the exact MS program name), ci
 }
 
 export async function POST(request: NextRequest) {
-  const { supabase, unauthorized } = await requireUser();
+  const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
+
+  const isAdmin = await checkIsAdmin(supabase, user);
+  let apiKey: string;
+  try {
+    apiKey = await resolveGeminiApiKey(user.id, isAdmin);
+    await checkAndIncrementUsage(supabase, user.id, "masters_discover", isAdmin);
+  } catch (error) {
+    if (error instanceof NoApiKeyError || error instanceof UsageLimitExceededError) {
+      return NextResponse.json({ error: error.message }, { status: error instanceof UsageLimitExceededError ? 429 : 403 });
+    }
+    throw error;
+  }
 
   const body = await request.json().catch(() => ({}));
   const profile = {
@@ -61,7 +76,7 @@ export async function POST(request: NextRequest) {
 
   let suggestions: z.infer<typeof DiscoveryResponseSchema>;
   try {
-    suggestions = await generateContent(buildPrompt(profile, excludeNames), DiscoveryResponseSchema);
+    suggestions = await generateContent(apiKey, buildPrompt(profile, excludeNames), DiscoveryResponseSchema);
   } catch (error) {
     await logError(supabase, "universities/discover", error instanceof Error ? error.message : String(error));
     const message =

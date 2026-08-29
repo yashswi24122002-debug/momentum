@@ -5,8 +5,9 @@ import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { NavContent } from "@/components/shared/sidebar-nav";
+import type { ToolKey } from "@/lib/types/admin";
 
-export function MobileHeader({ isAdmin = false }: { isAdmin?: boolean }) {
+export function MobileHeader({ isAdmin = false, enabledTools = [] }: { isAdmin?: boolean; enabledTools?: ToolKey[] }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -18,7 +19,7 @@ export function MobileHeader({ isAdmin = false }: { isAdmin?: boolean }) {
         </Button>
         <SheetContent side="left" className="w-64 p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <NavContent onNavigate={() => setOpen(false)} isAdmin={isAdmin} />
+          <NavContent onNavigate={() => setOpen(false)} isAdmin={isAdmin} enabledTools={enabledTools} />
         </SheetContent>
       </Sheet>
     </header>
