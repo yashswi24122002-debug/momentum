@@ -81,7 +81,10 @@ export async function updateSession(request: NextRequest) {
       return deny(403, "Forbidden", "/no-access");
     }
 
-    if (profile?.must_change_password && pathname !== "/change-password") {
+    // Also exempts /api/me/change-password itself — otherwise the page's
+    // own submit call (which is what flips must_change_password off) would
+    // be blocked by the very flag it exists to clear.
+    if (profile?.must_change_password && pathname !== "/change-password" && pathname !== "/api/me/change-password") {
       if (isApiPath) return deny(403, "Password change required");
       const url = request.nextUrl.clone();
       url.pathname = "/change-password";
