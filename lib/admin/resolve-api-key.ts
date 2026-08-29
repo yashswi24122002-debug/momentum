@@ -3,7 +3,7 @@ import { decryptApiKey } from "@/lib/admin/crypto";
 
 export class NoApiKeyError extends Error {
   constructor() {
-    super("Ask the admin to add your Gemini API key before using this feature.");
+    super("API key not set by admin. Ask them to add your Gemini API key before using this feature.");
   }
 }
 

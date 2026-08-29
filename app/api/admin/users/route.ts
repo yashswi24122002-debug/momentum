@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { randomBytes } from "crypto";
+import { generateTempPassword } from "@/lib/admin/temp-password";
 import type { ToolKey } from "@/lib/types/admin";
 
 const ALL_TOOLS: ToolKey[] = ["habits", "ideas", "content", "masters_abroad", "jobs", "calories"];
@@ -16,11 +16,6 @@ export async function GET() {
   }
 
   return NextResponse.json({ users: data });
-}
-
-function generateTempPassword(): string {
-  // Readable-ish but strong enough for a one-time, immediately-rotated credential.
-  return randomBytes(9).toString("base64").replace(/[+/=]/g, "x");
 }
 
 // Admin-driven account creation — no public signup exists. Returns the

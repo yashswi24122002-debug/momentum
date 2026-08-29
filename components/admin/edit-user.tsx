@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Key, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Check, Key, KeyRound, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,12 +51,16 @@ export function EditUser({ userId }: { userId: string }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
   const [tools, setTools] = useState<Record<ToolKey, boolean>>({} as Record<ToolKey, boolean>);
   const [limits, setLimits] = useState<Record<FeatureKey, string>>({} as Record<FeatureKey, string>);
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [newTempPassword, setNewTempPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -69,6 +73,7 @@ export function EditUser({ userId }: { userId: string }) {
       setDetail(detailJson);
       setStats(statsJson);
       setDisplayName(detailJson.profile?.display_name ?? "");
+      setEmail(detailJson.profile?.email ?? "");
 
       const toolMap = {} as Record<ToolKey, boolean>;
       for (const t of TOOL_ORDER) toolMap[t] = detailJson.toolAccess?.find((a: { tool_key: ToolKey }) => a.tool_key === t)?.enabled ?? false;
@@ -85,18 +90,47 @@ export function EditUser({ userId }: { userId: string }) {
   }, [userId]);
 
   async function saveProfile() {
+    if (!email.trim()) {
+      toast.error("Email is required.");
+      return;
+    }
     setSaving(true);
     const res = await fetch(`/api/admin/users/${userId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ display_name: displayName }),
+      body: JSON.stringify({ display_name: displayName, email }),
     });
     setSaving(false);
     if (!res.ok) {
-      toast.error("Couldn't save — try again.");
+      const { error } = await res.json().catch(() => ({ error: "Couldn't save — try again." }));
+      toast.error(error);
       return;
     }
+    const { profile } = await res.json();
+    setDetail((prev) => (prev ? { ...prev, profile } : prev));
     toast.success("Saved.");
+  }
+
+  async function resetPassword() {
+    setResetting(true);
+    const res = await fetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" });
+    setResetting(false);
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "Couldn't reset the password — try again." }));
+      toast.error(error);
+      return;
+    }
+    const { tempPassword } = await res.json();
+    setNewTempPassword(tempPassword);
+    setDetail((prev) => (prev ? { ...prev, profile: { ...prev.profile, must_change_password: true } } : prev));
+    toast.success("Password reset — send the new one to them now.");
+  }
+
+  async function handleCopyTempPassword() {
+    if (!newTempPassword) return;
+    await navigator.clipboard.writeText(newTempPassword);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   async function saveTools() {
@@ -195,9 +229,41 @@ export function EditUser({ userId }: { userId: string }) {
           <Label>Display name</Label>
           <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </div>
+        <div className="space-y-1.5">
+          <Label>Email</Label>
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
         <Button size="sm" onClick={saveProfile} disabled={saving} className="w-fit">
-          Save name
+          Save
         </Button>
+      </Card>
+
+      <Card className="max-w-md gap-3 border-border bg-surface p-5">
+        <CardHeader className="p-0">
+          <CardTitle className="flex items-center gap-1.5 text-sm text-text-secondary">
+            <KeyRound className="size-3.5" />
+            Password
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 p-0">
+          <p className="text-xs text-text-muted">
+            Passwords are never stored in a way anyone can read back — not even the admin. Resetting sets a brand-new
+            one you can hand to them; they&apos;ll be forced to change it on their next login.
+          </p>
+          {newTempPassword ? (
+            <>
+              <div className="rounded-lg bg-background p-3 font-mono text-sm text-text-primary">{newTempPassword}</div>
+              <Button variant="outline" size="sm" onClick={handleCopyTempPassword}>
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "Copied" : "Copy password"}
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={resetPassword} disabled={resetting} className="w-fit">
+              Reset password
+            </Button>
+          )}
+        </CardContent>
       </Card>
 
       <Card className="max-w-md gap-3 border-border bg-surface p-5">
