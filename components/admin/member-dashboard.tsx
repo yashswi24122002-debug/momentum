@@ -140,7 +140,7 @@ export function MemberDashboardContent({ userId }: { userId: string }) {
             {data.habits.length === 0 ? (
               <EmptyState icon={LayoutGrid} title="No habits yet" description="This member hasn't added any habits." />
             ) : (
-              <HabitDashboard preloadedHabits={data.habits} preloadedLogs={data.habitLogs} compact />
+              <HabitDashboard preloadedHabits={data.habits} preloadedLogs={data.habitLogs} />
             )}
           </CardContent>
         </Card>

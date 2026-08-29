@@ -45,8 +45,7 @@ const TOOLTIP_STYLE = { background: "#121716", border: "1px solid #232b29", font
 export function HabitDashboard({
   preloadedHabits,
   preloadedLogs,
-  compact = false,
-}: { preloadedHabits?: Habit[]; preloadedLogs?: HabitLog[]; compact?: boolean } = {}) {
+}: { preloadedHabits?: Habit[]; preloadedLogs?: HabitLog[] } = {}) {
   const [habits, setHabits] = useState<Habit[] | null>(preloadedHabits ?? null);
   const [logs, setLogs] = useState<HabitLog[] | null>(preloadedLogs ?? null);
   const today = todayLocalISODate();
@@ -149,7 +148,7 @@ export function HabitDashboard({
         </CardContent>
       </Card>
 
-      {compact ? (
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card className="border-border bg-surface">
           <CardHeader>
             <CardTitle className="text-sm text-text-secondary">Completion trend (12 weeks)</CardTitle>
@@ -166,178 +165,157 @@ export function HabitDashboard({
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      ) : (
-        <>
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-border bg-surface">
-              <CardHeader>
-                <CardTitle className="text-sm text-text-secondary">Completion trend (12 weeks)</CardTitle>
-              </CardHeader>
-              <CardContent className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trend}>
-                    <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
-                    <XAxis dataKey="weekStart" tick={AXIS_TICK} tickFormatter={(v) => v.slice(5)} />
-                    <YAxis domain={[0, 100]} tick={AXIS_TICK} width={30} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
-                    <Line type="monotone" dataKey="completionPct" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
 
-            <Card className="border-border bg-surface">
-              <CardHeader>
-                <CardTitle className="text-sm text-text-secondary">Completion by category (30 days)</CardTitle>
-              </CardHeader>
-              <CardContent className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryRates}
-                      dataKey="pct"
-                      nameKey="category"
-                      innerRadius={40}
-                      outerRadius={64}
-                      label={(entry) => `${entry.name} ${entry.value}%`}
-                      labelLine={false}
-                    >
-                      {categoryRates.map((entry, i) => (
-                        <Cell key={entry.category} fill={PALETTE[i % PALETTE.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-sm text-text-secondary">Completion by category (30 days)</CardTitle>
+          </CardHeader>
+          <CardContent className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={categoryRates}
+                  dataKey="pct"
+                  nameKey="category"
+                  innerRadius={40}
+                  outerRadius={64}
+                  label={(entry) => `${entry.name} ${entry.value}%`}
+                  labelLine={false}
+                >
+                  {categoryRates.map((entry, i) => (
+                    <Cell key={entry.category} fill={PALETTE[i % PALETTE.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-border bg-surface">
-              <CardHeader>
-                <CardTitle className="text-sm text-text-secondary">Daily productivity (30 days)</CardTitle>
-              </CardHeader>
-              <CardContent className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={productivity}>
-                    <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
-                    <XAxis dataKey="date" tick={AXIS_TICK} tickFormatter={(v) => v.slice(8)} />
-                    <YAxis allowDecimals={false} tick={AXIS_TICK} width={30} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Bar dataKey="completed" fill={CHART_COLORS.primary} radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-sm text-text-secondary">Daily productivity (30 days)</CardTitle>
+          </CardHeader>
+          <CardContent className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={productivity}>
+                <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
+                <XAxis dataKey="date" tick={AXIS_TICK} tickFormatter={(v) => v.slice(8)} />
+                <YAxis allowDecimals={false} tick={AXIS_TICK} width={30} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Bar dataKey="completed" fill={CHART_COLORS.primary} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-            <Card className="border-border bg-surface">
-              <CardHeader>
-                <CardTitle className="text-sm text-text-secondary">Completion by weekday (12 weeks)</CardTitle>
-              </CardHeader>
-              <CardContent className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weekdayRates}>
-                    <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
-                    <XAxis dataKey="weekday" tick={AXIS_TICK} />
-                    <YAxis domain={[0, 100]} tick={AXIS_TICK} width={30} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
-                    <Bar dataKey="pct" fill={CHART_COLORS.info} radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-sm text-text-secondary">Completion by weekday (12 weeks)</CardTitle>
+          </CardHeader>
+          <CardContent className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weekdayRates}>
+                <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
+                <XAxis dataKey="weekday" tick={AXIS_TICK} />
+                <YAxis domain={[0, 100]} tick={AXIS_TICK} width={30} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
+                <Bar dataKey="pct" fill={CHART_COLORS.info} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-border bg-surface">
-              <CardHeader>
-                <CardTitle className="text-sm text-text-secondary">Done vs. not done (30 days)</CardTitle>
-              </CardHeader>
-              <CardContent className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={64}>
-                      <Cell fill={CHART_COLORS.primary} />
-                      <Cell fill={CHART_COLORS.muted} />
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Legend wrapperStyle={{ fontSize: 11, color: "#9ca8a5" }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-sm text-text-secondary">Done vs. not done (30 days)</CardTitle>
+          </CardHeader>
+          <CardContent className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={64}>
+                  <Cell fill={CHART_COLORS.primary} />
+                  <Cell fill={CHART_COLORS.muted} />
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Legend wrapperStyle={{ fontSize: 11, color: "#9ca8a5" }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-            <Card className="border-border bg-surface">
-              <CardHeader>
-                <CardTitle className="text-sm text-text-secondary">Current vs. longest streak</CardTitle>
-              </CardHeader>
-              <CardContent style={{ height: Math.max(56 * streakBarData.length, 160) }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={streakBarData} layout="vertical" margin={{ left: 8 }}>
-                    <CartesianGrid stroke={CHART_COLORS.muted} horizontal={false} />
-                    <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} />
-                    <YAxis
-                      type="category"
-                      dataKey="habitName"
-                      tick={AXIS_TICK}
-                      width={90}
-                      tickFormatter={(v: string) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)}
-                    />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Legend wrapperStyle={{ fontSize: 11, color: "#9ca8a5" }} />
-                    <Bar dataKey="current" name="Current" fill={CHART_COLORS.primary} radius={[0, 3, 3, 0]} />
-                    <Bar dataKey="longest" name="Longest" fill={CHART_COLORS.info} radius={[0, 3, 3, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-sm text-text-secondary">Current vs. longest streak</CardTitle>
+          </CardHeader>
+          <CardContent style={{ height: Math.max(56 * streakBarData.length, 160) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={streakBarData} layout="vertical" margin={{ left: 8 }}>
+                <CartesianGrid stroke={CHART_COLORS.muted} horizontal={false} />
+                <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} />
+                <YAxis
+                  type="category"
+                  dataKey="habitName"
+                  tick={AXIS_TICK}
+                  width={90}
+                  tickFormatter={(v: string) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)}
+                />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Legend wrapperStyle={{ fontSize: 11, color: "#9ca8a5" }} />
+                <Bar dataKey="current" name="Current" fill={CHART_COLORS.primary} radius={[0, 3, 3, 0]} />
+                <Bar dataKey="longest" name="Longest" fill={CHART_COLORS.info} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
 
-          <Card className="border-border bg-surface">
-            <CardHeader>
-              <CardTitle className="text-sm text-text-secondary">Completion by habit (30 days)</CardTitle>
-            </CardHeader>
-            <CardContent style={{ height: Math.max(40 * habitBarData.length, 160) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={habitBarData} layout="vertical" margin={{ left: 8 }}>
-                  <CartesianGrid stroke={CHART_COLORS.muted} horizontal={false} />
-                  <XAxis type="number" domain={[0, 100]} tick={AXIS_TICK} />
-                  <YAxis
-                    type="category"
-                    dataKey="habitName"
-                    tick={AXIS_TICK}
-                    width={110}
-                    tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
-                  />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
-                  <Bar dataKey="pct" radius={[0, 3, 3, 0]}>
-                    {habitBarData.map((entry) => (
-                      <Cell key={entry.habitId} fill={entry.pct >= 70 ? CHART_COLORS.primary : entry.pct >= 40 ? "#f59e0b" : "#ef4444"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-surface">
-            <CardHeader>
-              <CardTitle className="text-sm text-text-secondary">Insights</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
-              <Insight label="Best habit" value={`${bestHabit.habitName} (${bestHabit.pct}%)`} />
-              <Insight label="Needs attention" value={`${worstHabit.habitName} (${worstHabit.pct}%)`} />
-              <Insight label="Best day" value={`${bestDay.weekday} (${bestDay.pct}%)`} />
-              <Insight label="Toughest day" value={`${worstDay.weekday} (${worstDay.pct}%)`} />
-              <Insight
-                label="Longest current streak"
-                value={`${longestCurrentStreak.habitName} — ${longestCurrentStreak.current}d`}
+      <Card className="border-border bg-surface">
+        <CardHeader>
+          <CardTitle className="text-sm text-text-secondary">Completion by habit (30 days)</CardTitle>
+        </CardHeader>
+        <CardContent style={{ height: Math.max(40 * habitBarData.length, 160) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={habitBarData} layout="vertical" margin={{ left: 8 }}>
+              <CartesianGrid stroke={CHART_COLORS.muted} horizontal={false} />
+              <XAxis type="number" domain={[0, 100]} tick={AXIS_TICK} />
+              <YAxis
+                type="category"
+                dataKey="habitName"
+                tick={AXIS_TICK}
+                width={110}
+                tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
               />
-            </CardContent>
-          </Card>
-        </>
-      )}
+              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
+              <Bar dataKey="pct" radius={[0, 3, 3, 0]}>
+                {habitBarData.map((entry) => (
+                  <Cell key={entry.habitId} fill={entry.pct >= 70 ? CHART_COLORS.primary : entry.pct >= 40 ? "#f59e0b" : "#ef4444"} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-surface">
+        <CardHeader>
+          <CardTitle className="text-sm text-text-secondary">Insights</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
+          <Insight label="Best habit" value={`${bestHabit.habitName} (${bestHabit.pct}%)`} />
+          <Insight label="Needs attention" value={`${worstHabit.habitName} (${worstHabit.pct}%)`} />
+          <Insight label="Best day" value={`${bestDay.weekday} (${bestDay.pct}%)`} />
+          <Insight label="Toughest day" value={`${worstDay.weekday} (${worstDay.pct}%)`} />
+          <Insight
+            label="Longest current streak"
+            value={`${longestCurrentStreak.habitName} — ${longestCurrentStreak.current}d`}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
