@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Copy, Check, Key, KeyRound, Trash2 } from "lucide-react";
+import { ArrowLeft, BarChart3, Copy, Check, Key, KeyRound, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,33 +23,9 @@ type Detail = {
   hasApiKey: boolean;
 };
 
-type DashboardStats = {
-  habits: { total: number; active: number };
-  ideas: Record<string, number>;
-  content: Record<string, number>;
-  universities: Record<string, number>;
-  tasks: Record<string, number>;
-  outreach: Record<string, number>;
-  calories: { totalLogs: number; distinctDays: number; dailyGoal: number | null };
-};
-
-function StatLine({ label, counts }: { label: string; counts: Record<string, number> }) {
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  const breakdown = Object.entries(counts)
-    .map(([k, v]) => `${v} ${k}`)
-    .join(", ");
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-text-secondary">{label}</span>
-      <span className="text-text-primary">{total === 0 ? "None" : breakdown}</span>
-    </div>
-  );
-}
-
 export function EditUser({ userId }: { userId: string }) {
   const router = useRouter();
   const [detail, setDetail] = useState<Detail | null>(null);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [tools, setTools] = useState<Record<ToolKey, boolean>>({} as Record<ToolKey, boolean>);
@@ -64,14 +40,9 @@ export function EditUser({ userId }: { userId: string }) {
 
   useEffect(() => {
     async function load() {
-      const [detailRes, statsRes] = await Promise.all([
-        fetch(`/api/admin/users/${userId}`),
-        fetch(`/api/admin/users/${userId}/dashboard`),
-      ]);
+      const detailRes = await fetch(`/api/admin/users/${userId}`);
       const detailJson = await detailRes.json();
-      const statsJson = await statsRes.json();
       setDetail(detailJson);
-      setStats(statsJson);
       setDisplayName(detailJson.profile?.display_name ?? "");
       setEmail(detailJson.profile?.email ?? "");
 
@@ -211,17 +182,23 @@ export function EditUser({ userId }: { userId: string }) {
     router.push("/admin/users");
   }
 
-  if (!detail || !stats) {
+  if (!detail) {
     return <Skeleton className="h-96 w-full rounded-xl" />;
   }
 
   return (
     <div className="flex flex-1 flex-col gap-6 pb-16">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" render={<Link href="/admin/users" />} nativeButton={false}>
-          <ArrowLeft className="size-4" />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" render={<Link href="/admin/users" />} nativeButton={false}>
+            <ArrowLeft className="size-4" />
+          </Button>
+          <h1 className="text-xl font-semibold text-text-primary">{detail.profile.display_name || detail.profile.email}</h1>
+        </div>
+        <Button variant="outline" size="sm" render={<Link href={`/admin/users/${userId}/dashboard`} />} nativeButton={false}>
+          <BarChart3 className="size-3.5" />
+          View their data
         </Button>
-        <h1 className="text-xl font-semibold text-text-primary">{detail.profile.display_name || detail.profile.email}</h1>
       </div>
 
       <Card className="max-w-md gap-3 border-border bg-surface p-5">
@@ -330,30 +307,6 @@ export function EditUser({ userId }: { userId: string }) {
               Remove key
             </Button>
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="max-w-md gap-3 border-border bg-surface p-5">
-        <CardHeader className="p-0">
-          <CardTitle className="text-sm text-text-secondary">Activity (read-only)</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 p-0">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-text-secondary">Habits</span>
-            <span className="text-text-primary">{stats.habits.active} active / {stats.habits.total} total</span>
-          </div>
-          <StatLine label="Ideas" counts={stats.ideas} />
-          <StatLine label="Content ideas" counts={stats.content} />
-          <StatLine label="Universities" counts={stats.universities} />
-          <StatLine label="Masters tasks" counts={stats.tasks} />
-          <StatLine label="Job outreach" counts={stats.outreach} />
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-text-secondary">Calorie logs</span>
-            <span className="text-text-primary">
-              {stats.calories.totalLogs} entries over {stats.calories.distinctDays} days
-              {stats.calories.dailyGoal ? ` · goal ${stats.calories.dailyGoal} kcal` : ""}
-            </span>
-          </div>
         </CardContent>
       </Card>
 

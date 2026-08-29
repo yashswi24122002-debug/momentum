@@ -38,12 +38,20 @@ const PALETTE = ["#10b981", "#38bdf8", "#f59e0b", "#ef4444", "#34d399", "#0ea5e9
 const AXIS_TICK = { fontSize: 10, fill: "#6b7674" };
 const TOOLTIP_STYLE = { background: "#121716", border: "1px solid #232b29", fontSize: 12 };
 
-export function HabitDashboard() {
-  const [habits, setHabits] = useState<Habit[] | null>(null);
-  const [logs, setLogs] = useState<HabitLog[] | null>(null);
+// Pass preloadedHabits/preloadedLogs to render another user's data (e.g. the
+// admin's read-only member dashboard) instead of self-fetching the caller's
+// own /api/habits — every chart and stat below is a pure function of these
+// two arrays, so no other change is needed to reuse this for anyone's data.
+export function HabitDashboard({
+  preloadedHabits,
+  preloadedLogs,
+}: { preloadedHabits?: Habit[]; preloadedLogs?: HabitLog[] } = {}) {
+  const [habits, setHabits] = useState<Habit[] | null>(preloadedHabits ?? null);
+  const [logs, setLogs] = useState<HabitLog[] | null>(preloadedLogs ?? null);
   const today = todayLocalISODate();
 
   useEffect(() => {
+    if (preloadedHabits && preloadedLogs) return;
     async function load() {
       const [habitsRes, logsRes] = await Promise.all([
         fetch("/api/habits"),
@@ -53,7 +61,7 @@ export function HabitDashboard() {
       setLogs((await logsRes.json()).logs ?? []);
     }
     load();
-  }, [today]);
+  }, [today, preloadedHabits, preloadedLogs]);
 
   const trend = useMemo(
     () => (habits && logs ? weeklyCompletionTrend(habits, logs, today) : []),
