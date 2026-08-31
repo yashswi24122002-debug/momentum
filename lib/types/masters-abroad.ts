@@ -67,7 +67,10 @@ export type ReminderLog = {
   days_before: number;
 };
 
+export type DiscoveryCourse = "cybersecurity" | "ai" | "architecture";
+
 export type DiscoveryProfile = {
+  course: DiscoveryCourse;
   gpa: string;
   work_experience: string;
   budget: string;

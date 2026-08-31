@@ -7,6 +7,8 @@ import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usa
 import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 import { matchCuratedUniversity } from "@/lib/masters-abroad/curated-universities";
+import { DISCOVERY_COURSE_PROMPT } from "@/lib/masters-abroad/ui";
+import type { DiscoveryCourse } from "@/lib/types/masters-abroad";
 
 const SUGGESTION_COUNT = 5;
 
@@ -29,13 +31,13 @@ const UniversitySuggestionSchema = z.object({
 });
 const DiscoveryResponseSchema = z.array(UniversitySuggestionSchema).length(SUGGESTION_COUNT);
 
-function buildPrompt(profile: Record<string, string>, excludeNames: string[]): string {
+function buildPrompt(course: DiscoveryCourse, profile: Record<string, string>, excludeNames: string[]): string {
   const excludeBlock =
     excludeNames.length === 0
       ? ""
       : `\n\nAlready suggested or already in this applicant's list — do NOT suggest these again:\n${excludeNames.map((n) => `- ${n}`).join("\n")}`;
 
-  return `Suggest ${SUGGESTION_COUNT} German universities with MS Cybersecurity (or closely related — information security, IT security) programs for this applicant, targeting Winter intake:
+  return `Suggest ${SUGGESTION_COUNT} German universities with ${DISCOVERY_COURSE_PROMPT[course]} programs for this applicant, targeting Winter intake:
 
 GPA: ${profile.gpa || "not specified"}
 Work experience: ${profile.work_experience || "not specified"}
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
+  const course: DiscoveryCourse = ["cybersecurity", "ai", "architecture"].includes(body.course) ? body.course : "cybersecurity";
   const profile = {
     gpa: typeof body.gpa === "string" ? body.gpa : "",
     work_experience: typeof body.work_experience === "string" ? body.work_experience : "",
@@ -76,7 +79,7 @@ export async function POST(request: NextRequest) {
 
   let suggestions: z.infer<typeof DiscoveryResponseSchema>;
   try {
-    suggestions = await generateContent(apiKey, buildPrompt(profile, excludeNames), DiscoveryResponseSchema);
+    suggestions = await generateContent(apiKey, buildPrompt(course, profile, excludeNames), DiscoveryResponseSchema);
   } catch (error) {
     await logError(supabase, "universities/discover", error instanceof Error ? error.message : String(error));
     const message =

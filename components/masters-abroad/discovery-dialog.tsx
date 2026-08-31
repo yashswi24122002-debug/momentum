@@ -14,11 +14,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import type { DiscoveryProfile } from "@/lib/types/masters-abroad";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { DISCOVERY_COURSE_ORDER, DISCOVERY_COURSE_LABELS } from "@/lib/masters-abroad/ui";
+import type { DiscoveryProfile, DiscoveryCourse } from "@/lib/types/masters-abroad";
 
 const PROFILE_STORAGE_KEY = "momentum:masters-abroad:profile";
 
 const EMPTY_PROFILE: DiscoveryProfile = {
+  course: "cybersecurity",
   gpa: "",
   work_experience: "",
   budget: "",
@@ -75,6 +78,24 @@ export function DiscoveryDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Course</Label>
+            <Select
+              value={profile.course}
+              onValueChange={(v) => setProfile((p) => ({ ...p, course: (v as DiscoveryCourse) ?? "cybersecurity" }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DISCOVERY_COURSE_ORDER.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {DISCOVERY_COURSE_LABELS[c]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {FIELDS.map((f) => (
             <div key={f.key} className="space-y-1.5">
               <Label>{f.label}</Label>
