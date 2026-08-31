@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Check, X, Snowflake } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, X, Snowflake, Plane } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { daysInMonth, toLocalISODate, todayLocalISODate, addDays } from "@/lib/date";
 import { isScheduledOn } from "@/lib/habits/schedule";
@@ -26,6 +36,12 @@ export function HabitGrid() {
   });
   const [habits, setHabits] = useState<Habit[] | null>(null);
   const [logsByKey, setLogsByKey] = useState<Map<string, CellState>>(new Map());
+  const [reloadToken, setReloadToken] = useState(0);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveFrom, setLeaveFrom] = useState(todayLocalISODate());
+  const [leaveTo, setLeaveTo] = useState(todayLocalISODate());
+  const [leaveNote, setLeaveNote] = useState("Vacation");
+  const [savingLeave, setSavingLeave] = useState(false);
 
   const today = todayLocalISODate();
   const earliestEditable = addDays(today, -(EDITABLE_WINDOW_DAYS - 1));
@@ -63,7 +79,29 @@ export function HabitGrid() {
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor.year, cursor.month]);
+  }, [cursor.year, cursor.month, reloadToken]);
+
+  async function saveLeave() {
+    if (leaveTo < leaveFrom) {
+      toast.error("End date must be on or after the start date.");
+      return;
+    }
+    setSavingLeave(true);
+    const res = await fetch("/api/habits/leave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date_from: leaveFrom, date_to: leaveTo, note: leaveNote || null }),
+    });
+    setSavingLeave(false);
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "Couldn't mark that as leave — try again." }));
+      toast.error(error);
+      return;
+    }
+    setLeaveOpen(false);
+    setReloadToken((t) => t + 1);
+    toast.success("Marked as leave — those days won't break your streaks.");
+  }
 
   async function toggleCell(habitId: string, date: string, current: CellState | undefined) {
     const key = `${habitId}:${date}`;
@@ -90,25 +128,40 @@ export function HabitGrid() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              setCursor((c) => (c.month === 0 ? { year: c.year - 1, month: 11 } : { year: c.year, month: c.month - 1 }))
+            }
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <span className="text-sm font-medium text-text-primary">{monthLabel}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              setCursor((c) => (c.month === 11 ? { year: c.year + 1, month: 0 } : { year: c.year, month: c.month + 1 }))
+            }
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={() =>
-            setCursor((c) => (c.month === 0 ? { year: c.year - 1, month: 11 } : { year: c.year, month: c.month - 1 }))
-          }
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setLeaveFrom(today);
+            setLeaveTo(today);
+            setLeaveNote("Vacation");
+            setLeaveOpen(true);
+          }}
         >
-          <ChevronLeft className="size-4" />
-        </Button>
-        <span className="text-sm font-medium text-text-primary">{monthLabel}</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() =>
-            setCursor((c) => (c.month === 11 ? { year: c.year + 1, month: 0 } : { year: c.year, month: c.month + 1 }))
-          }
-        >
-          <ChevronRight className="size-4" />
+          <Plane className="size-3.5" />
+          Mark leave
         </Button>
       </div>
 
@@ -199,6 +252,40 @@ export function HabitGrid() {
           </table>
         </div>
       )}
+
+      <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark as leave</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-text-secondary">
+              Every habit scheduled during this range is marked excused — none of them count as missed, so your
+              streaks carry straight through.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="leave-from">From</Label>
+                <Input id="leave-from" type="date" value={leaveFrom} max={today} onChange={(e) => setLeaveFrom(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="leave-to">To</Label>
+                <Input id="leave-to" type="date" value={leaveTo} max={today} onChange={(e) => setLeaveTo(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="leave-note">Note</Label>
+              <Input id="leave-note" value={leaveNote} onChange={(e) => setLeaveNote(e.target.value)} placeholder="Vacation" />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button onClick={saveLeave} disabled={savingLeave}>
+              {savingLeave ? "Saving…" : "Mark as leave"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
