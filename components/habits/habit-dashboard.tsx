@@ -37,6 +37,11 @@ const CHART_COLORS = { primary: "#10b981", muted: "#232b29", info: "#38bdf8" };
 const PALETTE = ["#10b981", "#38bdf8", "#f59e0b", "#ef4444", "#34d399", "#0ea5e9"];
 const AXIS_TICK = { fontSize: 10, fill: "#6b7674" };
 const TOOLTIP_STYLE = { background: "#121716", border: "1px solid #232b29", fontSize: 12 };
+// Recharts colors each tooltip row using that series' own data color by
+// default — invisible for a series like "Not done" whose color is nearly
+// the same dark gray as the tooltip background. Force a fixed light color
+// for every row instead of trusting per-series contrast.
+const TOOLTIP_TEXT_STYLE = { color: "#e5e7eb" };
 
 // Pass preloadedHabits/preloadedLogs to render another user's data (e.g. the
 // admin's read-only member dashboard) instead of self-fetching the caller's
@@ -159,7 +164,7 @@ export function HabitDashboard({
                 <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
                 <XAxis dataKey="weekStart" tick={AXIS_TICK} tickFormatter={(v) => v.slice(5)} />
                 <YAxis domain={[0, 100]} tick={AXIS_TICK} width={30} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_TEXT_STYLE} labelStyle={TOOLTIP_TEXT_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
                 <Line type="monotone" dataKey="completionPct" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -186,7 +191,7 @@ export function HabitDashboard({
                     <Cell key={entry.category} fill={PALETTE[i % PALETTE.length]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_TEXT_STYLE} labelStyle={TOOLTIP_TEXT_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -204,7 +209,7 @@ export function HabitDashboard({
                 <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
                 <XAxis dataKey="date" tick={AXIS_TICK} tickFormatter={(v) => v.slice(8)} />
                 <YAxis allowDecimals={false} tick={AXIS_TICK} width={30} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_TEXT_STYLE} labelStyle={TOOLTIP_TEXT_STYLE} />
                 <Bar dataKey="completed" fill={CHART_COLORS.primary} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -221,7 +226,7 @@ export function HabitDashboard({
                 <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
                 <XAxis dataKey="weekday" tick={AXIS_TICK} />
                 <YAxis domain={[0, 100]} tick={AXIS_TICK} width={30} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_TEXT_STYLE} labelStyle={TOOLTIP_TEXT_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
                 <Bar dataKey="pct" fill={CHART_COLORS.info} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -241,7 +246,7 @@ export function HabitDashboard({
                   <Cell fill={CHART_COLORS.primary} />
                   <Cell fill={CHART_COLORS.muted} />
                 </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_TEXT_STYLE} labelStyle={TOOLTIP_TEXT_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#9ca8a5" }} />
               </PieChart>
             </ResponsiveContainer>
@@ -264,7 +269,7 @@ export function HabitDashboard({
                   width={90}
                   tickFormatter={(v: string) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)}
                 />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_TEXT_STYLE} labelStyle={TOOLTIP_TEXT_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#9ca8a5" }} />
                 <Bar dataKey="current" name="Current" fill={CHART_COLORS.primary} radius={[0, 3, 3, 0]} />
                 <Bar dataKey="longest" name="Longest" fill={CHART_COLORS.info} radius={[0, 3, 3, 0]} />
@@ -290,7 +295,7 @@ export function HabitDashboard({
                 width={110}
                 tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
               />
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_TEXT_STYLE} labelStyle={TOOLTIP_TEXT_STYLE} formatter={(v) => [`${v}%`, "Completion"]} />
               <Bar dataKey="pct" radius={[0, 3, 3, 0]}>
                 {habitBarData.map((entry) => (
                   <Cell key={entry.habitId} fill={entry.pct >= 70 ? CHART_COLORS.primary : entry.pct >= 40 ? "#f59e0b" : "#ef4444"} />
