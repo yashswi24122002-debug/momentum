@@ -49,7 +49,13 @@ export async function GET(
       : { data: [] },
     enabledTools.has("calories") ? supabase.from("food_logs").select("id, logged_on").eq("user_id", id) : { data: [] },
     enabledTools.has("calories")
-      ? supabase.from("calorie_settings").select("daily_calorie_goal").eq("user_id", id).maybeSingle()
+      ? supabase
+          .from("calorie_settings")
+          .select("daily_calorie_goal")
+          .eq("user_id", id)
+          .order("effective_from", { ascending: false })
+          .limit(1)
+          .maybeSingle()
       : { data: null },
   ]);
 

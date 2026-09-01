@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
+import { todayLocalISODate } from "@/lib/date";
 
-// Single-row settings table (Master PRD single-user model) — GET returns
-// the one row if it exists, or null so the client can show onboarding.
+// calorie_settings is an append-only history (supabase/migrations/
+// 20260907000000) — GET always returns the most recent version, i.e. the
+// goals in effect starting today. Per-date reads (dashboard/history) use
+// lib/calories/settings-history.ts instead to resolve what applied on a
+// specific past day.
 export async function GET() {
   const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
-  const { data, error } = await supabase.from("calorie_settings").select("*").eq("user_id", user.id).maybeSingle();
+  const { data, error } = await supabase
+    .from("calorie_settings")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("effective_from", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -15,8 +25,10 @@ export async function GET() {
   return NextResponse.json({ settings: data });
 }
 
-// Upsert-by-first-row: creates the settings row on first save (onboarding),
-// updates it thereafter. There's only ever one row for this single-user app.
+// Upserts today's version specifically (onConflict user_id+effective_from)
+// — a second edit today replaces today's row rather than creating a
+// duplicate "effective today" version, but any earlier day's row is left
+// untouched so it keeps showing whatever goal actually applied then.
 export async function PATCH(request: NextRequest) {
   const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
@@ -34,9 +46,9 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "daily_calorie_goal must be between 500 and 10000" }, { status: 400 });
   }
 
-  const { data: existing } = await supabase.from("calorie_settings").select("id").eq("user_id", user.id).maybeSingle();
-
   const payload = {
+    user_id: user.id,
+    effective_from: todayLocalISODate(),
     daily_calorie_goal,
     protein_goal_g: protein_goal_g ?? null,
     carbs_goal_g: carbs_goal_g ?? null,
@@ -45,9 +57,11 @@ export async function PATCH(request: NextRequest) {
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = existing
-    ? await supabase.from("calorie_settings").update(payload).eq("id", existing.id).eq("user_id", user.id).select().single()
-    : await supabase.from("calorie_settings").insert(payload).select().single();
+  const { data, error } = await supabase
+    .from("calorie_settings")
+    .upsert(payload, { onConflict: "user_id,effective_from" })
+    .select()
+    .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -18,6 +18,9 @@ export type CalorieSettings = {
   carbs_goal_g: number | null;
   fat_goal_g: number | null;
   timezone: string;
+  /** The date this version of the goals took effect — past days resolve
+   * against whichever version was active on that date, not today's. */
+  effective_from: string;
 };
 
 export type FoodServing = {

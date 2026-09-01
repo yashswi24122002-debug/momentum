@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from "recharts";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const CHART_COLORS = { kcal: "#10b981", protein: "#38bdf8", carbs: "#f59e0b", fat: "#ef4444" };
+const CHART_COLORS = { kcal: "#10b981", goal: "#6b7674", protein: "#38bdf8", carbs: "#f59e0b", fat: "#ef4444" };
 const AXIS_TICK = { fontSize: 10, fill: "#6b7674" };
 const TOOLTIP_STYLE = { background: "#121716", border: "1px solid #232b29", fontSize: 12 };
 
-type DayPoint = { date: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number };
+type DayPoint = { date: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number; goal: number | null };
 
 export function HistoryPage() {
   const [days, setDays] = useState(30);
-  const [data, setData] = useState<{ days: DayPoint[]; goal: number | null } | null>(null);
+  const [data, setData] = useState<{ days: DayPoint[] } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -61,7 +61,7 @@ export function HistoryPage() {
               <XAxis dataKey="label" tick={AXIS_TICK} />
               <YAxis tick={AXIS_TICK} />
               <Tooltip contentStyle={TOOLTIP_STYLE} />
-              {data.goal && <ReferenceLine y={data.goal} stroke="#6b7674" strokeDasharray="4 4" />}
+              <Line type="stepAfter" dataKey="goal" name="Goal" stroke={CHART_COLORS.goal} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />
               <Line type="monotone" dataKey="kcal" stroke={CHART_COLORS.kcal} strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>

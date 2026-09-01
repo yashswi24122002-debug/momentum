@@ -231,16 +231,13 @@ export function HabitGrid() {
                           <button
                             type="button"
                             onClick={() => toggleCell(habit.id, date, cell)}
-                            className={cn(
-                              "flex size-5 items-center justify-center rounded",
-                              completed ? "bg-accent-muted-bg text-primary" : "bg-transparent text-text-muted hover:bg-surface-hover"
-                            )}
+                            className="flex size-5 items-center justify-center rounded hover:bg-surface-hover"
                           >
-                            {completed ? <Check className="size-3.5" /> : <X className="size-3 opacity-30" />}
+                            {completed ? <Check className="size-3.5 text-primary" /> : <X className="size-3.5 text-danger" />}
                           </button>
                         ) : (
-                          <span className={completed ? "text-primary" : "text-text-muted"}>
-                            {completed ? <Check className="mx-auto size-3.5" /> : "·"}
+                          <span className="flex items-center justify-center">
+                            {completed ? <Check className="size-3.5 text-primary" /> : <X className="size-3.5 text-danger" />}
                           </span>
                         )}
                       </td>

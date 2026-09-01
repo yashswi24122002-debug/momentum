@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { sumNutrition } from "@/lib/calories/nutrition";
+import { fetchSettingsHistory, resolveSettingsForDate } from "@/lib/calories/settings-history";
 import { todayLocalISODate } from "@/lib/date";
 import { MEAL_TYPE_ORDER } from "@/lib/calories/ui";
 import type { FoodLogItem, MealType } from "@/lib/types/calories";
@@ -12,8 +13,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date") ?? todayLocalISODate();
 
-  const [{ data: settings }, { data: logs, error: logsError }] = await Promise.all([
-    supabase.from("calorie_settings").select("*").eq("user_id", user.id).maybeSingle(),
+  const [settingsHistory, { data: logs, error: logsError }] = await Promise.all([
+    fetchSettingsHistory(supabase, user.id),
     supabase
       .from("food_logs")
       .select("*, food_log_items(*)")
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest) {
       .eq("logged_on", date)
       .order("logged_at", { ascending: true }),
   ]);
+  const settings = resolveSettingsForDate(settingsHistory, date);
 
   if (logsError) {
     return NextResponse.json({ error: logsError.message }, { status: 500 });

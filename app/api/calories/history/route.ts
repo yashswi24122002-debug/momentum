@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { sumNutrition } from "@/lib/calories/nutrition";
+import { fetchSettingsHistory, resolveSettingsForDate } from "@/lib/calories/settings-history";
 import { addDays, todayLocalISODate } from "@/lib/date";
 import type { FoodLogItem } from "@/lib/types/calories";
 
@@ -15,8 +16,8 @@ export async function GET(request: NextRequest) {
   const to = todayLocalISODate();
   const from = addDays(to, -(days - 1));
 
-  const [{ data: settings }, { data: logs, error }] = await Promise.all([
-    supabase.from("calorie_settings").select("daily_calorie_goal").eq("user_id", user.id).maybeSingle(),
+  const [settingsHistory, { data: logs, error }] = await Promise.all([
+    fetchSettingsHistory(supabase, user.id),
     supabase
       .from("food_logs")
       .select("logged_on, food_log_items(*)")
@@ -35,12 +36,16 @@ export async function GET(request: NextRequest) {
     byDate.set(log.logged_on, [...existing, ...(log.food_log_items ?? [])]);
   }
 
+  // Each day gets the goal that actually applied to it, not today's —
+  // otherwise changing today's goal would visually rewrite every past
+  // day's target on this chart too, the exact bug this fixes.
   const days_data = [];
   for (let i = 0; i < days; i++) {
     const date = addDays(from, i);
     const totals = sumNutrition(byDate.get(date) ?? []);
-    days_data.push({ date, ...totals });
+    const goal = resolveSettingsForDate(settingsHistory, date)?.daily_calorie_goal ?? null;
+    days_data.push({ date, ...totals, goal });
   }
 
-  return NextResponse.json({ days: days_data, goal: settings?.daily_calorie_goal ?? null });
+  return NextResponse.json({ days: days_data });
 }
