@@ -2,18 +2,41 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { CalorieRing } from "@/components/calories/calorie-ring";
 import { SettingsForm } from "@/components/calories/settings-form";
 import { SOURCE_LABELS, CONFIDENCE_TONES, MEAL_TYPE_LABELS } from "@/lib/calories/ui";
 import { todayLocalISODate, addDays } from "@/lib/date";
-import type { FoodLogWithItems, NutritionTotals, CalorieSettings } from "@/lib/types/calories";
+import type { FoodLogWithItems, FoodLogItem, NutritionTotals, CalorieSettings } from "@/lib/types/calories";
+
+type EditForm = {
+  quantity: string;
+  serving_label: string;
+  kcal: string;
+  protein_g: string;
+  carbs_g: string;
+  fat_g: string;
+};
+
+function toEditForm(item: FoodLogItem): EditForm {
+  return {
+    quantity: String(item.quantity),
+    serving_label: item.serving_label,
+    kcal: String(item.kcal),
+    protein_g: String(item.protein_g),
+    carbs_g: String(item.carbs_g),
+    fat_g: String(item.fat_g),
+  };
+}
 
 type MealGroup = { meal_type: string; logs: FoodLogWithItems[]; totals: NutritionTotals };
 type DashboardData = {
@@ -47,6 +70,9 @@ export function CaloriesDashboard() {
   const [date, setDate] = useState(todayLocalISODate());
   const [data, setData] = useState<DashboardData | null>(null);
   const [checkedSettings, setCheckedSettings] = useState(false);
+  const [editTarget, setEditTarget] = useState<{ logId: string; item: FoodLogItem } | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -85,6 +111,80 @@ export function CaloriesDashboard() {
       };
     });
     toast.success("Removed.");
+  }
+
+  function openEdit(logId: string, item: FoodLogItem) {
+    setEditTarget({ logId, item });
+    setEditForm(toEditForm(item));
+  }
+
+  async function handleSaveEdit() {
+    if (!editTarget || !editForm) return;
+    const { logId, item } = editTarget;
+
+    const quantity = Number(editForm.quantity);
+    const kcal = Number(editForm.kcal);
+    const protein_g = Number(editForm.protein_g);
+    const carbs_g = Number(editForm.carbs_g);
+    const fat_g = Number(editForm.fat_g);
+    if (!editForm.serving_label.trim() || !(quantity > 0) || [kcal, protein_g, carbs_g, fat_g].some(Number.isNaN)) {
+      toast.error("Enter valid numbers for quantity and every macro.");
+      return;
+    }
+
+    setSavingEdit(true);
+    const res = await fetch(`/api/calories/logs/${logId}/items/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quantity, serving_label: editForm.serving_label.trim(), kcal, protein_g, carbs_g, fat_g }),
+    });
+    setSavingEdit(false);
+    if (!res.ok) {
+      toast.error("Couldn't save that — try again.");
+      return;
+    }
+    const { item: updated } = (await res.json()) as { item: FoodLogItem };
+
+    setData((prev) => {
+      if (!prev) return prev;
+      const kcalDelta = updated.kcal - item.kcal;
+      const proteinDelta = updated.protein_g - item.protein_g;
+      const carbsDelta = updated.carbs_g - item.carbs_g;
+      const fatDelta = updated.fat_g - item.fat_g;
+
+      const mealGroups = prev.mealGroups.map((g) => {
+        if (!g.logs.some((l) => l.id === logId)) return g;
+        return {
+          ...g,
+          totals: {
+            kcal: g.totals.kcal + kcalDelta,
+            protein_g: Math.round((g.totals.protein_g + proteinDelta) * 10) / 10,
+            carbs_g: Math.round((g.totals.carbs_g + carbsDelta) * 10) / 10,
+            fat_g: Math.round((g.totals.fat_g + fatDelta) * 10) / 10,
+          },
+          logs: g.logs.map((l) =>
+            l.id === logId
+              ? { ...l, food_log_items: (l.food_log_items ?? []).map((i) => (i.id === updated.id ? updated : i)) }
+              : l
+          ),
+        };
+      });
+
+      return {
+        ...prev,
+        mealGroups,
+        consumed: {
+          kcal: prev.consumed.kcal + kcalDelta,
+          protein_g: Math.round((prev.consumed.protein_g + proteinDelta) * 10) / 10,
+          carbs_g: Math.round((prev.consumed.carbs_g + carbsDelta) * 10) / 10,
+          fat_g: Math.round((prev.consumed.fat_g + fatDelta) * 10) / 10,
+        },
+        remaining: prev.remaining !== null ? prev.remaining - kcalDelta : null,
+      };
+    });
+    setEditTarget(null);
+    setEditForm(null);
+    toast.success("Updated.");
   }
 
   if (!checkedSettings || data === null) {
@@ -167,6 +267,15 @@ export function CaloriesDashboard() {
                             </span>
                           </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="shrink-0 text-text-muted hover:text-text-primary"
+                          onClick={() => openEdit(log.id, item)}
+                          aria-label="Edit"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
                       </div>
                     ))}
                     <div className="flex justify-end">
@@ -187,6 +296,75 @@ export function CaloriesDashboard() {
           ))}
         </div>
       )}
+
+      <Dialog
+        open={editTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditTarget(null);
+            setEditForm(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit {editTarget?.item.display_name}</DialogTitle>
+          </DialogHeader>
+          {editForm && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Quantity</Label>
+                  <Input
+                    type="number"
+                    value={editForm.quantity}
+                    onChange={(e) => setEditForm((f) => f && { ...f, quantity: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Serving</Label>
+                  <Input
+                    value={editForm.serving_label}
+                    onChange={(e) => setEditForm((f) => f && { ...f, serving_label: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Kcal</Label>
+                  <Input type="number" value={editForm.kcal} onChange={(e) => setEditForm((f) => f && { ...f, kcal: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Protein g</Label>
+                  <Input
+                    type="number"
+                    value={editForm.protein_g}
+                    onChange={(e) => setEditForm((f) => f && { ...f, protein_g: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Carbs g</Label>
+                  <Input
+                    type="number"
+                    value={editForm.carbs_g}
+                    onChange={(e) => setEditForm((f) => f && { ...f, carbs_g: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Fat g</Label>
+                  <Input type="number" value={editForm.fat_g} onChange={(e) => setEditForm((f) => f && { ...f, fat_g: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button onClick={handleSaveEdit} disabled={savingEdit}>
+              {savingEdit ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
