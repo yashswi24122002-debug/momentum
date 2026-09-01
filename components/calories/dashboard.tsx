@@ -2,8 +2,19 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { Plus, Trash2, Pencil, GripVertical, ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,9 +25,10 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { CalorieRing } from "@/components/calories/calorie-ring";
 import { SettingsForm } from "@/components/calories/settings-form";
-import { SOURCE_LABELS, CONFIDENCE_TONES, MEAL_TYPE_LABELS } from "@/lib/calories/ui";
+import { SOURCE_LABELS, CONFIDENCE_TONES, MEAL_TYPE_LABELS, MEAL_TYPE_ORDER } from "@/lib/calories/ui";
 import { todayLocalISODate, addDays } from "@/lib/date";
-import type { FoodLogWithItems, FoodLogItem, NutritionTotals, CalorieSettings } from "@/lib/types/calories";
+import { cn } from "@/lib/utils";
+import type { FoodLogWithItems, FoodLogItem, NutritionTotals, CalorieSettings, MealType } from "@/lib/types/calories";
 
 type EditForm = {
   quantity: string;
@@ -47,6 +59,84 @@ type DashboardData = {
   mealGroups: MealGroup[];
 };
 
+function DroppableMealSection({ mealType, children }: { mealType: MealType; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: mealType });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn("space-y-2 rounded-xl p-1 transition-colors", isOver && "bg-accent-muted-bg/50 outline-2 outline-dashed outline-primary/40")}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DraggableLogCard({
+  log,
+  onEditItem,
+  onDelete,
+}: {
+  log: FoodLogWithItems;
+  onEditItem: (logId: string, item: FoodLogItem) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: log.id });
+  const style = { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 };
+
+  return (
+    <Card ref={setNodeRef} style={style} className="gap-2 border-border bg-surface p-3">
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          className="mt-0.5 shrink-0 cursor-grab touch-none text-text-muted active:cursor-grabbing"
+          aria-label="Drag to move to a different meal"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4" />
+        </button>
+        <div className="flex-1 space-y-2">
+          {(log.food_log_items ?? []).map((item) => (
+            <div key={item.id} className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm text-text-primary">
+                  {item.quantity} × {item.serving_label} {item.display_name}
+                </p>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <StatusBadge label={SOURCE_LABELS[item.source]} tone={CONFIDENCE_TONES[item.confidence]} />
+                  <span className="text-xs text-text-muted">
+                    {item.kcal} kcal · P{item.protein_g} C{item.carbs_g} F{item.fat_g}
+                  </span>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0 text-text-muted hover:text-text-primary"
+                onClick={() => onEditItem(log.id, item)}
+                aria-label="Edit"
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-text-muted hover:bg-danger/10 hover:text-danger"
+          onClick={() => onDelete(log.id)}
+          aria-label="Delete"
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 function MacroBar({ label, value, goal }: { label: string; value: number; goal?: number | null }) {
   const pct = goal ? Math.min(100, (value / goal) * 100) : 0;
   return (
@@ -73,6 +163,7 @@ export function CaloriesDashboard() {
   const [editTarget, setEditTarget] = useState<{ logId: string; item: FoodLogItem } | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useEffect(() => {
     async function load() {
@@ -111,6 +202,69 @@ export function CaloriesDashboard() {
       };
     });
     toast.success("Removed.");
+  }
+
+  function sumTotals(items: FoodLogItem[]): NutritionTotals {
+    return {
+      kcal: items.reduce((s, i) => s + i.kcal, 0),
+      protein_g: Math.round(items.reduce((s, i) => s + i.protein_g, 0) * 10) / 10,
+      carbs_g: Math.round(items.reduce((s, i) => s + i.carbs_g, 0) * 10) / 10,
+      fat_g: Math.round(items.reduce((s, i) => s + i.fat_g, 0) * 10) / 10,
+    };
+  }
+
+  function addTotals(a: NutritionTotals, b: NutritionTotals, sign: 1 | -1): NutritionTotals {
+    return {
+      kcal: a.kcal + sign * b.kcal,
+      protein_g: Math.round((a.protein_g + sign * b.protein_g) * 10) / 10,
+      carbs_g: Math.round((a.carbs_g + sign * b.carbs_g) * 10) / 10,
+      fat_g: Math.round((a.fat_g + sign * b.fat_g) * 10) / 10,
+    };
+  }
+
+  // Dragging a logged entry onto a different meal-type section moves it
+  // there — same PATCH the meal-type "moves" already used elsewhere, just
+  // triggered by drop instead of a form. Sections for meal types with no
+  // entries yet don't appear in mealGroups at all, so a drop onto one
+  // creates the group locally instead of assuming it's already there.
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || !data) return;
+    const logId = String(active.id);
+    const newMealType = over.id as MealType;
+
+    const log = data.mealGroups.flatMap((g) => g.logs).find((l) => l.id === logId);
+    if (!log || log.meal_type === newMealType) return;
+    const oldMealType = log.meal_type;
+    const itemTotals = sumTotals(log.food_log_items ?? []);
+    const movedLog = { ...log, meal_type: newMealType };
+
+    setData((prev) => {
+      if (!prev) return prev;
+      const withoutLog = prev.mealGroups
+        .map((g) => (g.meal_type === oldMealType ? { ...g, logs: g.logs.filter((l) => l.id !== logId), totals: addTotals(g.totals, itemTotals, -1) } : g))
+        .filter((g) => g.logs.length > 0);
+
+      const targetExists = withoutLog.some((g) => g.meal_type === newMealType);
+      const mealGroups = targetExists
+        ? withoutLog.map((g) => (g.meal_type === newMealType ? { ...g, logs: [...g.logs, movedLog], totals: addTotals(g.totals, itemTotals, 1) } : g))
+        : [...withoutLog, { meal_type: newMealType, logs: [movedLog], totals: itemTotals }];
+
+      return { ...prev, mealGroups };
+    });
+
+    const res = await fetch(`/api/calories/logs/${logId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meal_type: newMealType }),
+    });
+    if (!res.ok) {
+      toast.error("Couldn't move that — try again.");
+      const retryRes = await fetch(`/api/calories/dashboard?date=${date}`);
+      setData(await retryRes.json());
+      return;
+    }
+    toast.success(`Moved to ${MEAL_TYPE_LABELS[newMealType]}.`);
   }
 
   function openEdit(logId: string, item: FoodLogItem) {
@@ -244,57 +398,31 @@ export function CaloriesDashboard() {
       {data.mealGroups.length === 0 ? (
         <EmptyState icon={Flame} title="Nothing logged yet" description="Tap Add Food to log your first meal for this day." />
       ) : (
-        <div className="space-y-4">
-          {data.mealGroups.map((group) => (
-            <div key={group.meal_type} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-medium text-text-secondary">{MEAL_TYPE_LABELS[group.meal_type as keyof typeof MEAL_TYPE_LABELS]}</h2>
-                <span className="text-xs text-text-muted">{group.totals.kcal} kcal</span>
-              </div>
-              <div className="space-y-2">
-                {group.logs.map((log) => (
-                  <Card key={log.id} className="gap-2 border-border bg-surface p-3">
-                    {(log.food_log_items ?? []).map((item) => (
-                      <div key={item.id} className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm text-text-primary">
-                            {item.quantity} × {item.serving_label} {item.display_name}
-                          </p>
-                          <div className="mt-0.5 flex items-center gap-2">
-                            <StatusBadge label={SOURCE_LABELS[item.source]} tone={CONFIDENCE_TONES[item.confidence]} />
-                            <span className="text-xs text-text-muted">
-                              {item.kcal} kcal · P{item.protein_g} C{item.carbs_g} F{item.fat_g}
-                            </span>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="shrink-0 text-text-muted hover:text-text-primary"
-                          onClick={() => openEdit(log.id, item)}
-                          aria-label="Edit"
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                    <div className="flex justify-end">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-text-muted hover:bg-danger/10 hover:text-danger"
-                        onClick={() => handleDeleteLog(log.id)}
-                        aria-label="Delete"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <div className="space-y-4">
+            <p className="text-xs text-text-muted">Drag the grip on any entry to move it into a different meal.</p>
+            {MEAL_TYPE_ORDER.map((mealType) => {
+              const group = data.mealGroups.find((g) => g.meal_type === mealType);
+              return (
+                <div key={mealType} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-medium text-text-secondary">{MEAL_TYPE_LABELS[mealType]}</h2>
+                    {group && <span className="text-xs text-text-muted">{group.totals.kcal} kcal</span>}
+                  </div>
+                  <DroppableMealSection mealType={mealType}>
+                    {group ? (
+                      group.logs.map((log) => <DraggableLogCard key={log.id} log={log} onEditItem={openEdit} onDelete={handleDeleteLog} />)
+                    ) : (
+                      <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-text-muted">
+                        Nothing here — drop an entry to move it to {MEAL_TYPE_LABELS[mealType]}.
+                      </p>
+                    )}
+                  </DroppableMealSection>
+                </div>
+              );
+            })}
+          </div>
+        </DndContext>
       )}
 
       <Dialog

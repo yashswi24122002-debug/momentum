@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 
-// Meal-level edits only (meal type/label/notes) — item nutrition is an
-// immutable snapshot per PRD §14, so correcting an item means deleting and
-// re-adding the meal, not patching a logged value in place.
+const VALID_MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "other"];
+
+// Meal-level edits (meal type/label/notes) — meal_type is what the
+// dashboard's drag-and-drop between meal sections PATCHes to move a whole
+// logged entry into a different meal. Item nutrition is a separate
+// immutable-by-default snapshot (see the items/[itemId] route for the
+// direct-edit exception to that).
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,7 +19,12 @@ export async function PATCH(
   const body = await request.json();
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
-  if (typeof body.meal_type === "string") updates.meal_type = body.meal_type;
+  if (typeof body.meal_type === "string") {
+    if (!VALID_MEAL_TYPES.includes(body.meal_type)) {
+      return NextResponse.json({ error: `meal_type must be one of: ${VALID_MEAL_TYPES.join(", ")}` }, { status: 400 });
+    }
+    updates.meal_type = body.meal_type;
+  }
   if (body.meal_label !== undefined) updates.meal_label = body.meal_label;
   if (body.notes !== undefined) updates.notes = body.notes;
 
