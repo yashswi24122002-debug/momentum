@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin-guard";
+import { FEATURE_ORDER } from "@/lib/admin/ui";
 import type { FeatureKey } from "@/lib/types/admin";
-
-const ALL_FEATURES: FeatureKey[] = ["ideas_generate", "content_generate", "masters_discover", "calories_analyse_photo", "jobs_draft_outreach"];
 
 // Body: { limits: { ideas_generate: number | null, ... } } — null means unlimited.
 export async function PATCH(
@@ -20,7 +19,7 @@ export async function PATCH(
     return NextResponse.json({ error: "limits is required" }, { status: 400 });
   }
 
-  const rows = ALL_FEATURES.filter((f) => f in limits).map((feature_key) => ({
+  const rows = FEATURE_ORDER.filter((f) => f in limits).map((feature_key) => ({
     user_id: id,
     feature_key,
     daily_limit: limits[feature_key] === null || limits[feature_key] === undefined ? null : Number(limits[feature_key]),

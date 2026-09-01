@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Star, Trash2, Soup } from "lucide-react";
+import { Plus, Star, Trash2, Soup, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,8 +22,25 @@ const EMPTY_FORM = {
   protein_g_per_100g: "",
   carbs_g_per_100g: "",
   fat_g_per_100g: "",
+  fibre_g_per_100g: "",
+  sugar_g_per_100g: "",
+  sodium_mg_per_100g: "",
   default_serving_name: "",
   default_serving_g: "",
+};
+
+type FetchedDetails = {
+  is_beverage: boolean;
+  kcal_per_100: number;
+  protein_g_per_100: number;
+  carbs_g_per_100: number;
+  fat_g_per_100: number;
+  fibre_g_per_100: number | null;
+  sugar_g_per_100: number | null;
+  sodium_mg_per_100: number | null;
+  default_serving_name: string;
+  default_serving_amount: number;
+  note: string;
 };
 
 export function FoodsPage() {
@@ -35,6 +52,7 @@ export function FoodsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FoodWithServings | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [fetchingDetails, setFetchingDetails] = useState(false);
 
   async function loadAll() {
     const [personalRes, catalogueRes, favRes] = await Promise.all([
@@ -86,9 +104,42 @@ export function FoodsPage() {
     });
   }
 
+  async function handleFetchDetails() {
+    if (!form.name.trim()) {
+      toast.error("Enter a name first.");
+      return;
+    }
+    setFetchingDetails(true);
+    const res = await fetch("/api/calories/foods/fetch-details", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: form.name, brand: form.brand || null }),
+    });
+    setFetchingDetails(false);
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "Couldn't fetch details — try again or enter them manually." }));
+      toast.error(error);
+      return;
+    }
+    const { details } = (await res.json()) as { details: FetchedDetails };
+    setForm((prev) => ({
+      ...prev,
+      kcal_per_100g: String(details.kcal_per_100),
+      protein_g_per_100g: String(details.protein_g_per_100),
+      carbs_g_per_100g: String(details.carbs_g_per_100),
+      fat_g_per_100g: String(details.fat_g_per_100),
+      fibre_g_per_100g: details.fibre_g_per_100 !== null ? String(details.fibre_g_per_100) : "",
+      sugar_g_per_100g: details.sugar_g_per_100 !== null ? String(details.sugar_g_per_100) : "",
+      sodium_mg_per_100g: details.sodium_mg_per_100 !== null ? String(details.sodium_mg_per_100) : "",
+      default_serving_name: details.default_serving_name,
+      default_serving_g: String(details.default_serving_amount),
+    }));
+    toast.success(details.note);
+  }
+
   async function handleCreate() {
     if (!form.name.trim() || !form.kcal_per_100g) {
-      toast.error("Name and calories per 100g are required.");
+      toast.error("Name and calories per 100g/ml are required.");
       return;
     }
     setSaving(true);
@@ -103,6 +154,9 @@ export function FoodsPage() {
         protein_g_per_100g: Number(form.protein_g_per_100g) || 0,
         carbs_g_per_100g: Number(form.carbs_g_per_100g) || 0,
         fat_g_per_100g: Number(form.fat_g_per_100g) || 0,
+        fibre_g_per_100g: form.fibre_g_per_100g ? Number(form.fibre_g_per_100g) : null,
+        sugar_g_per_100g: form.sugar_g_per_100g ? Number(form.sugar_g_per_100g) : null,
+        sodium_mg_per_100g: form.sodium_mg_per_100g ? Number(form.sodium_mg_per_100g) : null,
         default_serving_name: form.default_serving_name.trim() || null,
         default_serving_g: form.default_serving_g ? Number(form.default_serving_g) : null,
       }),
@@ -207,7 +261,16 @@ export function FoodsPage() {
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>Name *</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <div className="flex gap-2">
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="flex-1" />
+                <Button type="button" variant="outline" size="sm" onClick={handleFetchDetails} disabled={fetchingDetails}>
+                  {fetchingDetails ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                  Fetch details
+                </Button>
+              </div>
+              <p className="text-xs text-text-muted">
+                AI-estimated from Indian nutrition standards (IFCT) where it applies — always verify against packaging if you have it.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -221,29 +284,41 @@ export function FoodsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Kcal / 100g *</Label>
+                <Label>Kcal / 100g or 100ml *</Label>
                 <Input type="number" value={form.kcal_per_100g} onChange={(e) => setForm({ ...form, kcal_per_100g: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Protein g / 100g</Label>
+                <Label>Protein g / 100g or 100ml</Label>
                 <Input type="number" value={form.protein_g_per_100g} onChange={(e) => setForm({ ...form, protein_g_per_100g: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Carbs g / 100g</Label>
+                <Label>Carbs g / 100g or 100ml</Label>
                 <Input type="number" value={form.carbs_g_per_100g} onChange={(e) => setForm({ ...form, carbs_g_per_100g: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Fat g / 100g</Label>
+                <Label>Fat g / 100g or 100ml</Label>
                 <Input type="number" value={form.fat_g_per_100g} onChange={(e) => setForm({ ...form, fat_g_per_100g: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Fibre g / 100g or 100ml</Label>
+                <Input type="number" value={form.fibre_g_per_100g} onChange={(e) => setForm({ ...form, fibre_g_per_100g: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sugar g / 100g or 100ml</Label>
+                <Input type="number" value={form.sugar_g_per_100g} onChange={(e) => setForm({ ...form, sugar_g_per_100g: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sodium mg / 100g or 100ml</Label>
+                <Input type="number" value={form.sodium_mg_per_100g} onChange={(e) => setForm({ ...form, sodium_mg_per_100g: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Default serving name</Label>
-                <Input placeholder="e.g. 1 piece" value={form.default_serving_name} onChange={(e) => setForm({ ...form, default_serving_name: e.target.value })} />
+                <Input placeholder="e.g. 1 piece or 1 glass" value={form.default_serving_name} onChange={(e) => setForm({ ...form, default_serving_name: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Default serving grams</Label>
+                <Label>Default serving grams/ml</Label>
                 <Input type="number" value={form.default_serving_g} onChange={(e) => setForm({ ...form, default_serving_g: e.target.value })} />
               </div>
             </div>

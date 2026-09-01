@@ -18,7 +18,13 @@ export type ToolAccess = {
   enabled: boolean;
 };
 
-export type FeatureKey = "ideas_generate" | "content_generate" | "masters_discover" | "calories_analyse_photo" | "jobs_draft_outreach";
+export type FeatureKey =
+  | "ideas_generate"
+  | "content_generate"
+  | "masters_discover"
+  | "calories_analyse_photo"
+  | "calories_fetch_details"
+  | "jobs_draft_outreach";
 
 export type UsageLimit = {
   id: string;
