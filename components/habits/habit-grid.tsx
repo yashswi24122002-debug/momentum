@@ -209,13 +209,22 @@ export function HabitGrid() {
                     const cell = logsByKey.get(`${habit.id}:${date}`);
                     const completed = cell?.completed ?? false;
                     const excused = cell?.excused ?? false;
-                    const scheduled = isScheduledOn(habit, date);
+                    // A day before the habit existed was never expected to
+                    // have anything logged — without this it reads as a
+                    // wall of "missed" crosses across the habit's entire
+                    // pre-creation history, not just genuinely missed days.
+                    const createdDate = toLocalISODate(new Date(habit.created_at));
+                    const scheduled = isScheduledOn(habit, date) && date >= createdDate;
                     const editable = date >= earliestEditable && date <= today;
                     const future = date > today;
 
                     if (!scheduled) {
                       return (
-                        <td key={day} className="border-b border-border p-1 text-center text-text-muted/40" title="Not scheduled">
+                        <td
+                          key={day}
+                          className="border-b border-border p-1 text-center text-text-muted/40"
+                          title={date < createdDate ? "Habit didn't exist yet" : "Not scheduled"}
+                        >
                           ·
                         </td>
                       );

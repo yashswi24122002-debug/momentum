@@ -13,7 +13,11 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const days = Number(searchParams.get("days") ?? DEFAULT_DAYS);
-  const to = todayLocalISODate();
+  // "today" from the caller's own browser clock when given — the server
+  // runs in UTC, which can be a calendar day behind a user well east of it
+  // (e.g. IST) for several hours around their local midnight.
+  const toParam = searchParams.get("to");
+  const to = toParam && /^\d{4}-\d{2}-\d{2}$/.test(toParam) ? toParam : todayLocalISODate();
   const from = addDays(to, -(days - 1));
 
   const [settingsHistory, { data: logs, error }] = await Promise.all([

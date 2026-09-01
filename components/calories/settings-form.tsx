@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { todayLocalISODate } from "@/lib/date";
 import type { CalorieSettings } from "@/lib/types/calories";
 
 export function SettingsForm({ onSaved }: { onSaved?: (settings: CalorieSettings) => void }) {
@@ -48,6 +49,7 @@ export function SettingsForm({ onSaved }: { onSaved?: (settings: CalorieSettings
         protein_goal_g: protein ? Number(protein) : null,
         carbs_goal_g: carbs ? Number(carbs) : null,
         fat_goal_g: fat ? Number(fat) : null,
+        effective_from: todayLocalISODate(),
       }),
     });
     setSaving(false);

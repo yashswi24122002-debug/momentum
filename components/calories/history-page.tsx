@@ -5,6 +5,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianG
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { todayLocalISODate } from "@/lib/date";
 
 const CHART_COLORS = { kcal: "#10b981", goal: "#6b7674", protein: "#38bdf8", carbs: "#f59e0b", fat: "#ef4444" };
 const AXIS_TICK = { fontSize: 10, fill: "#6b7674" };
@@ -19,7 +20,7 @@ export function HistoryPage() {
   useEffect(() => {
     async function load() {
       setData(null);
-      const res = await fetch(`/api/calories/history?days=${days}`);
+      const res = await fetch(`/api/calories/history?days=${days}&to=${todayLocalISODate()}`);
       const json = await res.json();
       setData(json);
     }

@@ -34,21 +34,28 @@ export async function PATCH(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
-  const { daily_calorie_goal, protein_goal_g, carbs_goal_g, fat_goal_g, timezone } = body as {
+  const { daily_calorie_goal, protein_goal_g, carbs_goal_g, fat_goal_g, timezone, effective_from } = body as {
     daily_calorie_goal?: number;
     protein_goal_g?: number | null;
     carbs_goal_g?: number | null;
     fat_goal_g?: number | null;
     timezone?: string;
+    effective_from?: string;
   };
 
   if (typeof daily_calorie_goal !== "number" || daily_calorie_goal < 500 || daily_calorie_goal > 10000) {
     return NextResponse.json({ error: "daily_calorie_goal must be between 500 and 10000" }, { status: 400 });
   }
 
+  // "Today" must come from the caller's own browser clock, not the
+  // server's — Vercel runs in UTC, so a save made after midnight in the
+  // user's own timezone but before midnight UTC would otherwise get
+  // stamped with the *previous* calendar day and silently overwrite that
+  // day's already-correct history instead of starting a new version today.
+  const isValidDate = typeof effective_from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(effective_from);
   const payload = {
     user_id: user.id,
-    effective_from: todayLocalISODate(),
+    effective_from: isValidDate ? effective_from : todayLocalISODate(),
     daily_calorie_goal,
     protein_goal_g: protein_goal_g ?? null,
     carbs_goal_g: carbs_goal_g ?? null,
