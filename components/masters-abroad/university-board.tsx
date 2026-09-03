@@ -166,7 +166,7 @@ export function UniversityBoard() {
       )}
 
       {selectedIds.length >= 2 && (
-        <div className="fixed inset-x-0 bottom-16 z-40 flex justify-center md:bottom-4 md:ml-28">
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center md:ml-28">
           <Button size="lg" onClick={() => setCompareOpen(true)} className="shadow-lg">
             <Columns3 className="size-4" />
             Compare ({selectedIds.length})
