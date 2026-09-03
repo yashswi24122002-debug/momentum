@@ -17,7 +17,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Archive, Plus, BellRing } from "lucide-react";
+import { GripVertical, Archive, Plus, BellRing, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -113,18 +113,29 @@ function SortableHabitRow({
           className="w-28"
         />
         {habit.reminder_time && (
-          <Select
-            value={habit.reminder_style ?? "nudge"}
-            onValueChange={(v) => v && onUpdate(habit.id, { reminder_style: v as "checkin" | "nudge" })}
-          >
-            <SelectTrigger size="sm" className="w-36 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="nudge">Nudge if not done</SelectItem>
-              <SelectItem value="checkin">Check-in (Yes/No)</SelectItem>
-            </SelectContent>
-          </Select>
+          <>
+            <Select
+              value={habit.reminder_style ?? "nudge"}
+              onValueChange={(v) => v && onUpdate(habit.id, { reminder_style: v as "checkin" | "nudge" })}
+            >
+              <SelectTrigger size="sm" className="w-36 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nudge">Nudge if not done</SelectItem>
+                <SelectItem value="checkin">Check-in (Yes/No)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-text-muted hover:text-danger"
+              onClick={() => onUpdate(habit.id, { reminder_time: null, reminder_style: null })}
+            >
+              <X className="size-4" />
+            </Button>
+          </>
         )}
       </div>
     </Card>
