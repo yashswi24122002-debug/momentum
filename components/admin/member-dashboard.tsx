@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
-import { HabitDashboard } from "@/components/habits/habit-dashboard";
+import { HabitDashboard } from "@/components/habits/habit-dashboard-lazy";
 import type { Habit, HabitLog } from "@/lib/types/habits";
 import type { Idea } from "@/lib/types/ideas";
 import type { ContentIdea } from "@/lib/types/content";

@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ export default function LoginPage() {
     <div className="flex min-h-full flex-1 items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm border-border bg-surface">
         <CardHeader>
+          <Image src="/brand/logo-mark.png" alt="" width={48} height={48} priority className="mb-1" />
           <CardTitle className="text-text-primary">Momentum</CardTitle>
           <CardDescription className="text-text-secondary">
             Sign in to your personal command center.

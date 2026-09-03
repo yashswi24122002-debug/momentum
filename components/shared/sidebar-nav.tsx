@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -123,7 +124,8 @@ export function NavContent({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-14 items-center px-5">
+      <div className="flex h-14 items-center gap-2 px-5">
+        <Image src="/brand/logo-mark.png" alt="" width={22} height={22} className="shrink-0" priority />
         <span className="text-sm font-semibold tracking-tight text-text-primary">Momentum</span>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-3">

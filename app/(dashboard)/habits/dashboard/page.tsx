@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { HabitDashboard } from "@/components/habits/habit-dashboard";
+import { HabitDashboard } from "@/components/habits/habit-dashboard-lazy";
 
 export default function HabitsDashboardPage() {
   return (

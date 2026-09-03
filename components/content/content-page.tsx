@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { Camera, Sparkles, Loader2, Images, History } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,12 +13,16 @@ import { RejectDialog } from "@/components/content/reject-dialog";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { GenerateDialog, type GenerateContext } from "@/components/content/generate-dialog";
 import { PipelineBoard, type ReportWithIdea } from "@/components/content/pipeline-board";
+import { fetcher } from "@/lib/swr-fetcher";
 import { todayLocalISODate } from "@/lib/date";
 import type { ContentIdea, ContentRejectionReason } from "@/lib/types/content";
 
 export function ContentPage() {
-  const [allIdeas, setAllIdeas] = useState<ContentIdea[] | null>(null);
-  const [reports, setReports] = useState<ReportWithIdea[] | null>(null);
+  const { data: ideasData, mutate: mutateIdeas } = useSWR<{ content_ideas: ContentIdea[] }>("/api/content", fetcher);
+  const { data: reportsData, mutate: mutateReports } = useSWR<{ reports: ReportWithIdea[] }>("/api/content-reports", fetcher);
+  const allIdeas = ideasData?.content_ideas ?? null;
+  const reports = reportsData?.reports ?? null;
+
   const [generating, setGenerating] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<ContentIdea | null>(null);
@@ -27,19 +32,8 @@ export function ContentPage() {
   const today = todayLocalISODate();
 
   async function loadAll() {
-    const [ideasRes, reportsRes] = await Promise.all([fetch("/api/content"), fetch("/api/content-reports")]);
-    setAllIdeas((await ideasRes.json()).content_ideas ?? []);
-    setReports((await reportsRes.json()).reports ?? []);
+    await Promise.all([mutateIdeas(), mutateReports()]);
   }
-
-  useEffect(() => {
-    async function load() {
-      const [ideasRes, reportsRes] = await Promise.all([fetch("/api/content"), fetch("/api/content-reports")]);
-      setAllIdeas((await ideasRes.json()).content_ideas ?? []);
-      setReports((await reportsRes.json()).reports ?? []);
-    }
-    load();
-  }, []);
 
   const pendingToday = (allIdeas ?? []).filter((i) => i.status === "pending" && i.date_generated === today);
 
@@ -86,8 +80,12 @@ export function ContentPage() {
       toast.error("Couldn't reject that idea — try again.");
       return;
     }
-    setAllIdeas(
-      (prev) => prev?.map((i) => (i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i)) ?? null
+    mutateIdeas(
+      (prev) =>
+        prev && {
+          content_ideas: prev.content_ideas.map((i) => (i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i)),
+        },
+      { revalidate: false }
     );
   }
 
@@ -100,8 +98,10 @@ export function ContentPage() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setAllIdeas((prev) => prev?.filter((i) => i.id !== deleteTarget.id) ?? null);
-    setReports((prev) => prev?.filter((r) => r.content_idea_id !== deleteTarget.id) ?? null);
+    mutateIdeas((prev) => prev && { content_ideas: prev.content_ideas.filter((i) => i.id !== deleteTarget.id) }, { revalidate: false });
+    mutateReports((prev) => prev && { reports: prev.reports.filter((r) => r.content_idea_id !== deleteTarget.id) }, {
+      revalidate: false,
+    });
     setDeleteTarget(null);
     toast.success("Deleted.");
   }

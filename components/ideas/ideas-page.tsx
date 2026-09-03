@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { Lightbulb, Sparkles, Loader2, History } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,16 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { PipelineBoard, type ReportWithIdea } from "@/components/ideas/pipeline-board";
 import { WeeklyDigestCard } from "@/components/ideas/weekly-digest";
 import { computeWeeklyDigest } from "@/lib/ideas/digest";
+import { fetcher } from "@/lib/swr-fetcher";
 import { todayLocalISODate } from "@/lib/date";
 import type { Idea, RejectionReason } from "@/lib/types/ideas";
 
 export function IdeasPage() {
-  const [allIdeas, setAllIdeas] = useState<Idea[] | null>(null);
-  const [reports, setReports] = useState<ReportWithIdea[] | null>(null);
+  const { data: ideasData, mutate: mutateIdeas } = useSWR<{ ideas: Idea[] }>("/api/ideas", fetcher);
+  const { data: reportsData, mutate: mutateReports } = useSWR<{ reports: ReportWithIdea[] }>("/api/idea-reports", fetcher);
+  const allIdeas = ideasData?.ideas ?? null;
+  const reports = reportsData?.reports ?? null;
+
   const [generating, setGenerating] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Idea | null>(null);
@@ -27,19 +32,8 @@ export function IdeasPage() {
   const today = todayLocalISODate();
 
   async function loadAll() {
-    const [ideasRes, reportsRes] = await Promise.all([fetch("/api/ideas"), fetch("/api/idea-reports")]);
-    setAllIdeas((await ideasRes.json()).ideas ?? []);
-    setReports((await reportsRes.json()).reports ?? []);
+    await Promise.all([mutateIdeas(), mutateReports()]);
   }
-
-  useEffect(() => {
-    async function load() {
-      const [ideasRes, reportsRes] = await Promise.all([fetch("/api/ideas"), fetch("/api/idea-reports")]);
-      setAllIdeas((await ideasRes.json()).ideas ?? []);
-      setReports((await reportsRes.json()).reports ?? []);
-    }
-    load();
-  }, []);
 
   const pendingToday = (allIdeas ?? []).filter((i) => i.status === "pending" && i.date_generated === today);
 
@@ -81,19 +75,27 @@ export function IdeasPage() {
       toast.error("Couldn't reject that idea — try again.");
       return;
     }
-    setAllIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i)) ?? null);
+    mutateIdeas(
+      (prev) =>
+        prev && { ideas: prev.ideas.map((i) => (i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i)) },
+      { revalidate: false }
+    );
   }
 
   async function handleToggleSave(idea: Idea) {
     const nextSaved = !idea.saved;
-    setAllIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, saved: nextSaved } : i)) ?? null);
+    mutateIdeas((prev) => prev && { ideas: prev.ideas.map((i) => (i.id === idea.id ? { ...i, saved: nextSaved } : i)) }, {
+      revalidate: false,
+    });
     const res = await fetch(`/api/ideas/${idea.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ saved: nextSaved }),
     });
     if (!res.ok) {
-      setAllIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, saved: idea.saved } : i)) ?? null);
+      mutateIdeas((prev) => prev && { ideas: prev.ideas.map((i) => (i.id === idea.id ? { ...i, saved: idea.saved } : i)) }, {
+        revalidate: false,
+      });
       toast.error("Couldn't save that — try again.");
     }
   }
@@ -107,8 +109,8 @@ export function IdeasPage() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setAllIdeas((prev) => prev?.filter((i) => i.id !== deleteTarget.id) ?? null);
-    setReports((prev) => prev?.filter((r) => r.idea_id !== deleteTarget.id) ?? null);
+    mutateIdeas((prev) => prev && { ideas: prev.ideas.filter((i) => i.id !== deleteTarget.id) }, { revalidate: false });
+    mutateReports((prev) => prev && { reports: prev.reports.filter((r) => r.idea_id !== deleteTarget.id) }, { revalidate: false });
     setDeleteTarget(null);
     toast.success("Deleted.");
   }

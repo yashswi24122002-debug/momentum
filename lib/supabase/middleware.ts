@@ -91,20 +91,59 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    if (!isAdmin && !isAdminPath) {
-      const tool = resolveToolForPath(pathname);
-      if (tool) {
-        const { data: access } = await supabase
-          .from("tool_access")
-          .select("enabled")
-          .eq("user_id", user.id)
-          .eq("tool_key", tool)
-          .maybeSingle();
+    let enabledTools: string[] = [];
+    if (!isAdmin) {
+      if (isApiPath) {
+        // API paths don't consume the header-passing below, so keep the
+        // original narrow query — only the one tool this specific path
+        // actually needs, not the full list.
+        if (!isAdminPath) {
+          const tool = resolveToolForPath(pathname);
+          if (tool) {
+            const { data: access } = await supabase
+              .from("tool_access")
+              .select("enabled")
+              .eq("user_id", user.id)
+              .eq("tool_key", tool)
+              .maybeSingle();
+            if (!access?.enabled) {
+              return deny(403, "This tool isn't enabled for your account", "/no-access");
+            }
+          }
+        }
+      } else {
+        // Pages always render through the dashboard layout, which needs
+        // every enabled tool for nav filtering regardless of which one
+        // this specific path is — fetching the full list once here and
+        // handing it forward via headers avoids the layout re-querying
+        // this same table on every single page nav (see below).
+        const { data: accessRows } = await supabase.from("tool_access").select("tool_key").eq("user_id", user.id).eq("enabled", true);
+        enabledTools = (accessRows ?? []).map((r) => r.tool_key);
 
-        if (!access?.enabled) {
-          return deny(403, "This tool isn't enabled for your account", "/no-access");
+        if (!isAdminPath) {
+          const tool = resolveToolForPath(pathname);
+          if (tool && !enabledTools.includes(tool)) {
+            return deny(403, "This tool isn't enabled for your account", "/no-access");
+          }
         }
       }
+    }
+
+    // Pages only: hand the Server Component layout what was just verified
+    // via request headers, so it can skip its own redundant getUser() +
+    // profiles + tool_access round trip for nav filtering and the
+    // must-change-password redirect (still its own defense-in-depth check,
+    // just informed by this same request's already-fresh data instead of
+    // re-fetching it). API routes don't read these — their own
+    // requireUser()/requireAdmin() stays fully independent on purpose.
+    if (!isApiPath) {
+      const headers = new Headers(request.headers);
+      headers.set("x-momentum-is-admin", isAdmin ? "1" : "0");
+      headers.set("x-momentum-must-change-password", profile?.must_change_password ? "1" : "0");
+      headers.set("x-momentum-enabled-tools", enabledTools.join(","));
+      const response = NextResponse.next({ request: { headers } });
+      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+      return response;
     }
   }
 

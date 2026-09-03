@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { Plus, Trash2, Pencil, GripVertical, ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -25,6 +26,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { CalorieRing } from "@/components/calories/calorie-ring";
 import { SettingsForm } from "@/components/calories/settings-form";
+import { fetcher } from "@/lib/swr-fetcher";
 import { SOURCE_LABELS, CONFIDENCE_TONES, MEAL_TYPE_LABELS, MEAL_TYPE_ORDER } from "@/lib/calories/ui";
 import { todayLocalISODate, addDays } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -158,22 +160,11 @@ function MacroBar({ label, value, goal }: { label: string; value: number; goal?:
 
 export function CaloriesDashboard() {
   const [date, setDate] = useState(todayLocalISODate());
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [checkedSettings, setCheckedSettings] = useState(false);
+  const { data, mutate } = useSWR<DashboardData>(`/api/calories/dashboard?date=${date}`, fetcher);
   const [editTarget, setEditTarget] = useState<{ logId: string; item: FoodLogItem } | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch(`/api/calories/dashboard?date=${date}`);
-      const json = await res.json();
-      setData(json);
-      setCheckedSettings(true);
-    }
-    load();
-  }, [date]);
 
   async function handleDeleteLog(id: string) {
     const res = await fetch(`/api/calories/logs/${id}`, { method: "DELETE" });
@@ -181,7 +172,7 @@ export function CaloriesDashboard() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setData((prev) => {
+    mutate((prev) => {
       if (!prev) return prev;
       const removedLog = prev.mealGroups.flatMap((g) => g.logs).find((l) => l.id === id);
       if (!removedLog) return prev;
@@ -200,7 +191,7 @@ export function CaloriesDashboard() {
         },
         remaining: prev.remaining !== null ? prev.remaining + removedItems.reduce((s, i) => s + i.kcal, 0) : null,
       };
-    });
+    }, { revalidate: false });
     toast.success("Removed.");
   }
 
@@ -239,7 +230,7 @@ export function CaloriesDashboard() {
     const itemTotals = sumTotals(log.food_log_items ?? []);
     const movedLog = { ...log, meal_type: newMealType };
 
-    setData((prev) => {
+    mutate((prev) => {
       if (!prev) return prev;
       const withoutLog = prev.mealGroups
         .map((g) => (g.meal_type === oldMealType ? { ...g, logs: g.logs.filter((l) => l.id !== logId), totals: addTotals(g.totals, itemTotals, -1) } : g))
@@ -251,7 +242,7 @@ export function CaloriesDashboard() {
         : [...withoutLog, { meal_type: newMealType, logs: [movedLog], totals: itemTotals }];
 
       return { ...prev, mealGroups };
-    });
+    }, { revalidate: false });
 
     const res = await fetch(`/api/calories/logs/${logId}`, {
       method: "PATCH",
@@ -260,8 +251,7 @@ export function CaloriesDashboard() {
     });
     if (!res.ok) {
       toast.error("Couldn't move that — try again.");
-      const retryRes = await fetch(`/api/calories/dashboard?date=${date}`);
-      setData(await retryRes.json());
+      mutate();
       return;
     }
     toast.success(`Moved to ${MEAL_TYPE_LABELS[newMealType]}.`);
@@ -299,7 +289,7 @@ export function CaloriesDashboard() {
     }
     const { item: updated } = (await res.json()) as { item: FoodLogItem };
 
-    setData((prev) => {
+    mutate((prev) => {
       if (!prev) return prev;
       const kcalDelta = updated.kcal - item.kcal;
       const proteinDelta = updated.protein_g - item.protein_g;
@@ -335,13 +325,13 @@ export function CaloriesDashboard() {
         },
         remaining: prev.remaining !== null ? prev.remaining - kcalDelta : null,
       };
-    });
+    }, { revalidate: false });
     setEditTarget(null);
     setEditForm(null);
     toast.success("Updated.");
   }
 
-  if (!checkedSettings || data === null) {
+  if (data === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-40 w-full rounded-xl" />
@@ -355,7 +345,7 @@ export function CaloriesDashboard() {
       <div className="flex flex-1 flex-col gap-6">
         <h1 className="text-xl font-semibold text-text-primary">Calories</h1>
         <EmptyState icon={Flame} title="Set a daily calorie goal to get started" description="You can change this anytime in Settings." />
-        <SettingsForm onSaved={(settings) => setData((prev) => (prev ? { ...prev, settings } : prev))} />
+        <SettingsForm onSaved={(settings) => mutate((prev) => (prev ? { ...prev, settings } : prev), { revalidate: false })} />
       </div>
     );
   }

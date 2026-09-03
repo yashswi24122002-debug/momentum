@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { Briefcase, Send, ListChecks, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { JobCard } from "@/components/jobs/job-card";
 import { DraftOutreachDialog } from "@/components/jobs/draft-outreach-dialog";
 import { CheckContactDialog } from "@/components/jobs/check-contact-dialog";
+import { fetcher } from "@/lib/swr-fetcher";
 import { JOB_STATUS_ORDER, JOB_STATUS_LABELS } from "@/lib/jobs/ui";
 import type { JobPosting, JobPostingStatus } from "@/lib/types/jobs";
 import type { HunterContact } from "@/lib/integrations/hunter";
@@ -30,9 +32,10 @@ const ALL_SOURCES = "__all__";
 type SortBy = "fit" | "newest";
 
 export function JobFeed() {
-  const [jobs, setJobs] = useState<JobPosting[] | null>(null);
   const [filter, setFilter] = useState<JobPostingStatus>("new");
   const [minFitScore, setMinFitScore] = useState(0);
+  const { data, mutate } = useSWR<{ jobs: JobPosting[] }>(`/api/jobs?minFitScore=${minFitScore}`, fetcher);
+  const jobs = data?.jobs ?? null;
   const [deleteTarget, setDeleteTarget] = useState<JobPosting | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [draftTarget, setDraftTarget] = useState<JobPosting | null>(null);
@@ -44,18 +47,8 @@ export function JobFeed() {
   const [sourceFilter, setSourceFilter] = useState(ALL_SOURCES);
   const [sortBy, setSortBy] = useState<SortBy>("fit");
 
-  useEffect(() => {
-    async function load() {
-      setJobs(null);
-      const res = await fetch(`/api/jobs?minFitScore=${minFitScore}`);
-      const json = await res.json();
-      setJobs(json.jobs ?? []);
-    }
-    load();
-  }, [minFitScore]);
-
   async function handleStatusChange(id: string, status: JobPostingStatus) {
-    setJobs((prev) => prev?.map((j) => (j.id === id ? { ...j, status } : j)) ?? null);
+    mutate((prev) => prev && { jobs: prev.jobs.map((j) => (j.id === id ? { ...j, status } : j)) }, { revalidate: false });
     const res = await fetch(`/api/jobs/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -73,7 +66,7 @@ export function JobFeed() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setJobs((prev) => prev?.filter((j) => j.id !== deleteTarget.id) ?? null);
+    mutate((prev) => prev && { jobs: prev.jobs.filter((j) => j.id !== deleteTarget.id) }, { revalidate: false });
     setDeleteTarget(null);
     toast.success("Deleted.");
   }

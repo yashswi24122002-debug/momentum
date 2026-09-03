@@ -1,4 +1,4 @@
-import { HistoryPage } from "@/components/calories/history-page";
+import { HistoryPage } from "@/components/calories/history-page-lazy";
 
 export default function Page() {
   return <HistoryPage />;

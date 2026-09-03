@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -12,7 +13,10 @@ export function MobileHeader({ isAdmin = false, enabledTools = [] }: { isAdmin?:
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-background px-4 md:hidden">
-      <span className="text-sm font-semibold tracking-tight text-text-primary">Momentum</span>
+      <span className="flex items-center gap-2 text-sm font-semibold tracking-tight text-text-primary">
+        <Image src="/brand/logo-mark.png" alt="" width={22} height={22} priority />
+        Momentum
+      </span>
       <Sheet open={open} onOpenChange={setOpen}>
         <Button variant="ghost" size="icon" onClick={() => setOpen(true)} aria-label="Open menu">
           <Menu className="size-5" />

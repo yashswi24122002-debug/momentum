@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Momentum",
   description: "Personal command center for habits, ideas, content, jobs, and grad school applications.",
+  themeColor: "#0a0e0d",
+  appleWebApp: {
+    title: "Momentum",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

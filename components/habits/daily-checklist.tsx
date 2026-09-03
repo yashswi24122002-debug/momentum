@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import useSWR from "swr";
 import { Settings2, CheckSquare, Snowflake, StickyNote, PartyPopper } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CatchUpBanner } from "@/components/habits/catch-up-banner";
+import { fetcher } from "@/lib/swr-fetcher";
 import { todayLocalISODate, addDays } from "@/lib/date";
 import { isScheduledOn } from "@/lib/habits/schedule";
 import { habitStreaks, STREAK_MILESTONES } from "@/lib/habits/stats";
@@ -29,28 +31,25 @@ const STREAK_LOOKBACK_DAYS = 500;
 
 export function DailyChecklist() {
   const router = useRouter();
-  const [habits, setHabits] = useState<Habit[] | null>(null);
-  const [logsByHabitId, setLogsByHabitId] = useState<Map<string, HabitLog>>(new Map());
-  const [noteHabit, setNoteHabit] = useState<Habit | null>(null);
-  const [noteDraft, setNoteDraft] = useState("");
   const today = todayLocalISODate();
 
-  useEffect(() => {
-    async function load() {
-      const [habitsRes, logsRes] = await Promise.all([
-        fetch("/api/habits"),
-        fetch(`/api/habits/logs?from=${today}&to=${today}`),
-      ]);
-      const habitsJson = await habitsRes.json();
-      const logsJson = await logsRes.json();
+  // SWR caches both by key, so re-entering /habits after visiting another
+  // tab shows the last-known state instantly instead of a loading flash,
+  // then quietly revalidates in the background.
+  const { data: habitsData } = useSWR<{ habits: Habit[] }>("/api/habits", fetcher);
+  const { data: logsData, mutate: mutateLogs } = useSWR<{ logs: HabitLog[] }>(
+    `/api/habits/logs?from=${today}&to=${today}`,
+    fetcher
+  );
 
-      setHabits(habitsJson.habits ?? []);
-      setLogsByHabitId(
-        new Map((logsJson.logs as HabitLog[] | undefined)?.map((log) => [log.habit_id, log]) ?? [])
-      );
-    }
-    load();
-  }, [today]);
+  const habits = habitsData?.habits ?? null;
+  const logsByHabitId = useMemo(
+    () => new Map((logsData?.logs ?? []).map((log) => [log.habit_id, log])),
+    [logsData]
+  );
+
+  const [noteHabit, setNoteHabit] = useState<Habit | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
 
   const scheduledHabits = (habits ?? []).filter((h) => isScheduledOn(h, today));
 
@@ -64,20 +63,22 @@ export function DailyChecklist() {
     }
   }
 
-  async function toggleComplete(habit: Habit) {
+  function withLog(habit: Habit, patch: Partial<HabitLog>): HabitLog[] {
     const previous = logsByHabitId.get(habit.id);
-    const nextCompleted = !previous?.completed;
+    const nextLog: HabitLog = {
+      ...(previous ?? { id: "", habit_id: habit.id, date: today, logged_at: "", excused: false, note: null, completed: false }),
+      ...patch,
+    };
+    const rest = (logsData?.logs ?? []).filter((l) => l.habit_id !== habit.id);
+    return [...rest, nextLog];
+  }
+
+  async function toggleComplete(habit: Habit) {
+    const previous = logsData?.logs ?? [];
+    const nextCompleted = !logsByHabitId.get(habit.id)?.completed;
 
     // Optimistic update — PRD acceptance criteria requires instant feedback.
-    setLogsByHabitId((prev) => {
-      const next = new Map(prev);
-      next.set(habit.id, {
-        ...(previous ?? { id: "", habit_id: habit.id, date: today, logged_at: "", excused: false, note: null, completed: false }),
-        completed: nextCompleted,
-        excused: false,
-      });
-      return next;
-    });
+    mutateLogs({ logs: withLog(habit, { completed: nextCompleted, excused: false }) }, { revalidate: false });
 
     const res = await fetch(`/api/habits/${habit.id}/log`, {
       method: "POST",
@@ -86,12 +87,7 @@ export function DailyChecklist() {
     });
 
     if (!res.ok) {
-      setLogsByHabitId((prev) => {
-        const next = new Map(prev);
-        if (previous) next.set(habit.id, previous);
-        else next.delete(habit.id);
-        return next;
-      });
+      mutateLogs({ logs: previous }, { revalidate: false });
       toast.error("Couldn't save that — try again.");
       return;
     }
@@ -100,18 +96,10 @@ export function DailyChecklist() {
   }
 
   async function toggleExcused(habit: Habit) {
-    const previous = logsByHabitId.get(habit.id);
-    const nextExcused = !previous?.excused;
+    const previous = logsData?.logs ?? [];
+    const nextExcused = !logsByHabitId.get(habit.id)?.excused;
 
-    setLogsByHabitId((prev) => {
-      const next = new Map(prev);
-      next.set(habit.id, {
-        ...(previous ?? { id: "", habit_id: habit.id, date: today, logged_at: "", excused: false, note: null, completed: false }),
-        excused: nextExcused,
-        completed: false,
-      });
-      return next;
-    });
+    mutateLogs({ logs: withLog(habit, { excused: nextExcused, completed: false }) }, { revalidate: false });
 
     const res = await fetch(`/api/habits/${habit.id}/log`, {
       method: "POST",
@@ -120,12 +108,7 @@ export function DailyChecklist() {
     });
 
     if (!res.ok) {
-      setLogsByHabitId((prev) => {
-        const next = new Map(prev);
-        if (previous) next.set(habit.id, previous);
-        else next.delete(habit.id);
-        return next;
-      });
+      mutateLogs({ logs: previous }, { revalidate: false });
       toast.error("Couldn't save that — try again.");
     } else if (nextExcused) {
       toast("Marked excused — today won't break your streak.");
@@ -150,7 +133,8 @@ export function DailyChecklist() {
       return;
     }
     const { log } = await res.json();
-    setLogsByHabitId((prev) => new Map(prev).set(habit.id, log));
+    const rest = (logsData?.logs ?? []).filter((l) => l.habit_id !== habit.id);
+    mutateLogs({ logs: [...rest, log] }, { revalidate: false });
     setNoteHabit(null);
   }
 
