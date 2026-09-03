@@ -27,6 +27,15 @@ export async function PATCH(
     }
     updates.frequency_days = body.frequency_days;
   }
+  if (typeof body.reminder_time === "string" || body.reminder_time === null) {
+    if (body.reminder_time !== null && !/^\d{2}:\d{2}$/.test(body.reminder_time)) {
+      return NextResponse.json({ error: "reminder_time must be HH:MM or null" }, { status: 400 });
+    }
+    updates.reminder_time = body.reminder_time;
+  }
+  if (body.reminder_style === "checkin" || body.reminder_style === "nudge" || body.reminder_style === null) {
+    updates.reminder_style = body.reminder_style;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });

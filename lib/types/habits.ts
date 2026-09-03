@@ -1,5 +1,6 @@
 export type Habit = {
   id: string;
+  user_id: string;
   name: string;
   category: string | null;
   active: boolean;
@@ -9,6 +10,11 @@ export type Habit = {
   /** Weekdays this habit applies to, 0=Sun..6=Sat (matches Date#getDay()). All 7 = daily. */
   frequency_days: number[];
   color: string | null;
+  /** "HH:MM:SS" (Postgres time), local IST — null means no reminder set. */
+  reminder_time: string | null;
+  /** "checkin" fires unconditionally with Yes/No actions; "nudge" only fires if not yet completed that day. */
+  reminder_style: "checkin" | "nudge" | null;
+  reminder_sent_on: string | null;
 };
 
 export type HabitLog = {
