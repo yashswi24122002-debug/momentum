@@ -1,29 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { OutreachCard } from "@/components/jobs/outreach-card";
+import { fetcher } from "@/lib/swr-fetcher";
 import { OUTREACH_STATUS_ORDER, OUTREACH_STATUS_LABELS } from "@/lib/jobs/ui";
 import type { Outreach } from "@/lib/types/jobs";
 
 type OutreachWithJob = Outreach & { job_postings: { company: string; role_title: string; url: string | null } | null };
 
 export function OutreachQueue() {
-  const [outreach, setOutreach] = useState<OutreachWithJob[] | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/outreach");
-      const json = await res.json();
-      setOutreach(json.outreach ?? []);
-    }
-    load();
-  }, []);
+  const { data, mutate } = useSWR<{ outreach: OutreachWithJob[] }>("/api/outreach", fetcher);
+  const outreach = data?.outreach ?? null;
 
   async function patchOutreach(id: string, body: Record<string, unknown>) {
     const res = await fetch(`/api/outreach/${id}`, {
@@ -36,7 +29,9 @@ export function OutreachQueue() {
       return;
     }
     const { outreach: updated } = await res.json();
-    setOutreach((prev) => prev?.map((o) => (o.id === id ? { ...o, ...updated } : o)) ?? null);
+    mutate((prev) => prev && { outreach: prev.outreach.map((o) => (o.id === id ? { ...o, ...updated } : o)) }, {
+      revalidate: false,
+    });
   }
 
   async function sendOutreach(id: string) {
@@ -47,7 +42,9 @@ export function OutreachQueue() {
       return;
     }
     const { outreach: updated } = await res.json();
-    setOutreach((prev) => prev?.map((o) => (o.id === id ? { ...o, ...updated } : o)) ?? null);
+    mutate((prev) => prev && { outreach: prev.outreach.map((o) => (o.id === id ? { ...o, ...updated } : o)) }, {
+      revalidate: false,
+    });
     toast.success("Sent.");
   }
 

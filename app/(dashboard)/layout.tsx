@@ -11,24 +11,25 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The proxy/middleware already resolved the session, role,
+  // must-change-password, and enabled tools fresh for this exact request
+  // (it has to, to enforce access) — reading its result via headers
+  // instead of re-running auth.getUser() (a real network round trip to
+  // Supabase's Auth server) and getSessionContext() here skips a second
+  // full round trip on every single page nav. Falls back to the real
+  // fetch if the headers are missing for any reason (e.g. this layout
+  // somehow rendering for a request the proxy didn't see), so this is
+  // strictly an optimization, never a weaker check than before.
+  const headerList = await headers();
 
-  if (!user) {
-    redirect("/login");
+  if (headerList.get("x-momentum-user-id") === null) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) redirect("/login");
   }
 
-  // The proxy/middleware already resolved role, must-change-password, and
-  // enabled tools fresh for this exact request (it has to, to enforce
-  // access) — reading its result via headers instead of calling
-  // getSessionContext() here skips a second getUser()+profiles+tool_access
-  // round trip on every single page nav. Falls back to the real fetch if
-  // the headers are missing for any reason (e.g. this layout somehow
-  // rendering for a request the proxy didn't see), so this is strictly an
-  // optimization, never a weaker check than before.
-  const headerList = await headers();
   const headerIsAdmin = headerList.get("x-momentum-is-admin");
   const headerMustChangePassword = headerList.get("x-momentum-must-change-password");
   const headerEnabledTools = headerList.get("x-momentum-enabled-tools");

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import useSWR from "swr";
 import { X, History } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { fetcher } from "@/lib/swr-fetcher";
 import { addDays, todayLocalISODate, toLocalISODate } from "@/lib/date";
 import { isScheduledOn } from "@/lib/habits/schedule";
 import type { Habit, HabitLog } from "@/lib/types/habits";
@@ -17,7 +19,6 @@ function dismissKey(date: string) {
 /** Dismissible prompt for habits that were scheduled yesterday but never marked done. */
 export function CatchUpBanner() {
   const yesterday = addDays(todayLocalISODate(), -1);
-  const [pending, setPending] = useState<Habit[] | null>(null);
   const [dismissed, setDismissed] = useState(() => {
     try {
       return localStorage.getItem(dismissKey(yesterday)) === "1";
@@ -26,28 +27,27 @@ export function CatchUpBanner() {
     }
   });
 
-  useEffect(() => {
-    if (dismissed) return;
+  // SWR is skipped entirely (key: null) once dismissed — no point fetching
+  // data for a banner that won't render.
+  const { data: habitsData, mutate: mutateHabits } = useSWR<{ habits: Habit[] }>(
+    dismissed ? null : "/api/habits",
+    fetcher
+  );
+  const { data: logsData } = useSWR<{ logs: HabitLog[] }>(
+    dismissed ? null : `/api/habits/logs?from=${yesterday}&to=${yesterday}`,
+    fetcher
+  );
 
-    async function load() {
-      const [habitsRes, logsRes] = await Promise.all([
-        fetch("/api/habits"),
-        fetch(`/api/habits/logs?from=${yesterday}&to=${yesterday}`),
-      ]);
-      const habits: Habit[] = (await habitsRes.json()).habits ?? [];
-      const logs: HabitLog[] = (await logsRes.json()).logs ?? [];
-      const doneIds = new Set(logs.filter((l) => l.completed || l.excused).map((l) => l.habit_id));
-      setPending(
-        habits.filter(
-          (h) =>
-            toLocalISODate(new Date(h.created_at)) <= yesterday &&
-            isScheduledOn(h, yesterday) &&
-            !doneIds.has(h.id)
-        )
-      );
-    }
-    load();
-  }, [yesterday, dismissed]);
+  const pending = useMemo(() => {
+    if (!habitsData || !logsData) return null;
+    const doneIds = new Set(logsData.logs.filter((l) => l.completed || l.excused).map((l) => l.habit_id));
+    return habitsData.habits.filter(
+      (h) =>
+        toLocalISODate(new Date(h.created_at)) <= yesterday &&
+        isScheduledOn(h, yesterday) &&
+        !doneIds.has(h.id)
+    );
+  }, [habitsData, logsData, yesterday]);
 
   async function markDone(habit: Habit) {
     const res = await fetch(`/api/habits/${habit.id}/log`, {
@@ -59,7 +59,7 @@ export function CatchUpBanner() {
       toast.error("Couldn't save that — try again.");
       return;
     }
-    setPending((prev) => prev?.filter((h) => h.id !== habit.id) ?? null);
+    mutateHabits((prev) => prev && { habits: prev.habits.filter((h) => h.id !== habit.id) }, { revalidate: false });
   }
 
   function dismiss() {

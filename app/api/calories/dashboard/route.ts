@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date") ?? todayLocalISODate();
 
-  const [settingsHistory, { data: logs, error: logsError }] = await Promise.all([
+  const [settingsHistory, { data: logs, error: logsError }, { data: leaveRow }] = await Promise.all([
     fetchSettingsHistory(supabase, user.id),
     supabase
       .from("food_logs")
@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
       .eq("user_id", user.id)
       .eq("logged_on", date)
       .order("logged_at", { ascending: true }),
+    supabase.from("calorie_leave_days").select("note").eq("user_id", user.id).eq("date", date).maybeSingle(),
   ]);
   const settings = resolveSettingsForDate(settingsHistory, date);
 
@@ -49,5 +50,6 @@ export async function GET(request: NextRequest) {
     consumed,
     remaining,
     mealGroups,
+    leave: leaveRow ? { note: leaveRow.note } : null,
   });
 }

@@ -129,22 +129,27 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    // Pages only: hand the Server Component layout what was just verified
-    // via request headers, so it can skip its own redundant getUser() +
-    // profiles + tool_access round trip for nav filtering and the
-    // must-change-password redirect (still its own defense-in-depth check,
-    // just informed by this same request's already-fresh data instead of
-    // re-fetching it). API routes don't read these — their own
-    // requireUser()/requireAdmin() stays fully independent on purpose.
+    // Hand downstream code what was just verified via request headers, so
+    // it can skip its own redundant auth.getUser() call — a real network
+    // round trip to Supabase's Auth server, not a local JWT decode. Every
+    // API route's requireUser()/requireAdmin() was independently repeating
+    // this exact same check a few milliseconds later for the identical
+    // request; trusting this request's already-fresh result cuts that
+    // duplicate round trip everywhere, on top of an already-slow free-tier
+    // Supabase project. Pages additionally get the nav/gating fields (as
+    // before) so the dashboard layout can skip its own profile +
+    // tool_access round trip too.
+    const headers = new Headers(request.headers);
+    headers.set("x-momentum-user-id", user.id);
+    headers.set("x-momentum-user-email", user.email ?? "");
     if (!isApiPath) {
-      const headers = new Headers(request.headers);
       headers.set("x-momentum-is-admin", isAdmin ? "1" : "0");
       headers.set("x-momentum-must-change-password", profile?.must_change_password ? "1" : "0");
       headers.set("x-momentum-enabled-tools", enabledTools.join(","));
-      const response = NextResponse.next({ request: { headers } });
-      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-      return response;
     }
+    const response = NextResponse.next({ request: { headers } });
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    return response;
   }
 
   return supabaseResponse;

@@ -17,9 +17,13 @@ export async function GET(request: NextRequest) {
   const minFitScoreParam = searchParams.get("minFitScore");
   const minFitScore = minFitScoreParam !== null ? Number(minFitScoreParam) : DEFAULT_MIN_FIT_SCORE;
 
+  // description_raw is only ever read server-side (draft-outreach, the
+  // aggregation cron) — excluding it here was the entire fix for this
+  // route's 300-row response ballooning to ~300KB for a feed that never
+  // renders it.
   let query = supabase
     .from("job_postings")
-    .select("*")
+    .select("id, source, company, role_title, location, remote, url, tech_stack_tags, posted_date, discovered_at, fit_score, status")
     .gte("fit_score", minFitScore)
     .order("fit_score", { ascending: false })
     .limit(MAX_RESULTS);

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { ArrowLeft, Copy, Check, Key, KeyRound, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { MemberDashboardContent } from "@/components/admin/member-dashboard";
+import { fetcher } from "@/lib/swr-fetcher";
 import { TOOL_ORDER, TOOL_LABELS, FEATURE_ORDER, FEATURE_LABELS } from "@/lib/admin/ui";
 import type { Profile, ToolKey, FeatureKey } from "@/lib/types/admin";
 
@@ -26,7 +28,7 @@ type Detail = {
 
 export function EditUser({ userId }: { userId: string }) {
   const router = useRouter();
-  const [detail, setDetail] = useState<Detail | null>(null);
+  const { data: detail, mutate: mutateDetail } = useSWR<Detail>(`/api/admin/users/${userId}`, fetcher);
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [tools, setTools] = useState<Record<ToolKey, boolean>>({} as Record<ToolKey, boolean>);
@@ -39,27 +41,28 @@ export function EditUser({ userId }: { userId: string }) {
   const [newTempPassword, setNewTempPassword] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // These fields are user-editable, so they're only ever seeded from the
+  // fetched detail once per userId — not resynced on every SWR revalidation
+  // or optimistic mutate(), which would otherwise clobber unsaved edits.
+  const initializedForUserId = useRef<string | null>(null);
   useEffect(() => {
-    async function load() {
-      const detailRes = await fetch(`/api/admin/users/${userId}`);
-      const detailJson = await detailRes.json();
-      setDetail(detailJson);
-      setDisplayName(detailJson.profile?.display_name ?? "");
-      setEmail(detailJson.profile?.email ?? "");
+    if (!detail || initializedForUserId.current === userId) return;
+    initializedForUserId.current = userId;
 
-      const toolMap = {} as Record<ToolKey, boolean>;
-      for (const t of TOOL_ORDER) toolMap[t] = detailJson.toolAccess?.find((a: { tool_key: ToolKey }) => a.tool_key === t)?.enabled ?? false;
-      setTools(toolMap);
+    setDisplayName(detail.profile?.display_name ?? "");
+    setEmail(detail.profile?.email ?? "");
 
-      const limitMap = {} as Record<FeatureKey, string>;
-      for (const f of FEATURE_ORDER) {
-        const row = detailJson.limits?.find((l: { feature_key: FeatureKey }) => l.feature_key === f);
-        limitMap[f] = row?.daily_limit === null || row?.daily_limit === undefined ? "" : String(row.daily_limit);
-      }
-      setLimits(limitMap);
+    const toolMap = {} as Record<ToolKey, boolean>;
+    for (const t of TOOL_ORDER) toolMap[t] = detail.toolAccess?.find((a) => a.tool_key === t)?.enabled ?? false;
+    setTools(toolMap);
+
+    const limitMap = {} as Record<FeatureKey, string>;
+    for (const f of FEATURE_ORDER) {
+      const row = detail.limits?.find((l) => l.feature_key === f);
+      limitMap[f] = row?.daily_limit === null || row?.daily_limit === undefined ? "" : String(row.daily_limit);
     }
-    load();
-  }, [userId]);
+    setLimits(limitMap);
+  }, [detail, userId]);
 
   async function saveProfile() {
     if (!email.trim()) {
@@ -79,7 +82,7 @@ export function EditUser({ userId }: { userId: string }) {
       return;
     }
     const { profile } = await res.json();
-    setDetail((prev) => (prev ? { ...prev, profile } : prev));
+    mutateDetail((prev) => (prev ? { ...prev, profile } : prev), { revalidate: false });
     toast.success("Saved.");
   }
 
@@ -94,7 +97,9 @@ export function EditUser({ userId }: { userId: string }) {
     }
     const { tempPassword } = await res.json();
     setNewTempPassword(tempPassword);
-    setDetail((prev) => (prev ? { ...prev, profile: { ...prev.profile, must_change_password: true } } : prev));
+    mutateDetail((prev) => (prev ? { ...prev, profile: { ...prev.profile, must_change_password: true } } : prev), {
+      revalidate: false,
+    });
     toast.success("Password reset — send the new one to them now.");
   }
 
@@ -155,7 +160,7 @@ export function EditUser({ userId }: { userId: string }) {
       return;
     }
     setApiKey("");
-    setDetail((prev) => (prev ? { ...prev, hasApiKey: true } : prev));
+    mutateDetail((prev) => (prev ? { ...prev, hasApiKey: true } : prev), { revalidate: false });
     toast.success("API key saved.");
   }
 
@@ -167,7 +172,7 @@ export function EditUser({ userId }: { userId: string }) {
       toast.error("Couldn't remove the API key — try again.");
       return;
     }
-    setDetail((prev) => (prev ? { ...prev, hasApiKey: false } : prev));
+    mutateDetail((prev) => (prev ? { ...prev, hasApiKey: false } : prev), { revalidate: false });
     toast.success("API key removed.");
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import useSWR from "swr";
 import { ChevronLeft, ChevronRight, Check, X, Snowflake, Plane } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { fetcher } from "@/lib/swr-fetcher";
 import { daysInMonth, toLocalISODate, todayLocalISODate, addDays } from "@/lib/date";
 import { isScheduledOn } from "@/lib/habits/schedule";
 import type { Habit, HabitLog } from "@/lib/types/habits";
@@ -34,9 +36,6 @@ export function HabitGrid() {
     const today = new Date();
     return { year: today.getFullYear(), month: today.getMonth() };
   });
-  const [habits, setHabits] = useState<Habit[] | null>(null);
-  const [logsByKey, setLogsByKey] = useState<Map<string, CellState>>(new Map());
-  const [reloadToken, setReloadToken] = useState(0);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaveFrom, setLeaveFrom] = useState(todayLocalISODate());
   const [leaveTo, setLeaveTo] = useState(todayLocalISODate());
@@ -51,35 +50,30 @@ export function HabitGrid() {
     [totalDays]
   );
 
-  useEffect(() => {
-    async function load() {
-      const from = toLocalISODate(new Date(cursor.year, cursor.month, 1));
-      const to = toLocalISODate(new Date(cursor.year, cursor.month, totalDays));
+  const from = toLocalISODate(new Date(cursor.year, cursor.month, 1));
+  const to = toLocalISODate(new Date(cursor.year, cursor.month, totalDays));
 
-      const [habitsRes, logsRes] = await Promise.all([
-        habits ? Promise.resolve(null) : fetch("/api/habits"),
-        fetch(`/api/habits/logs?from=${from}&to=${to}`),
-      ]);
+  // "/api/habits" is a stable key across month navigation, so SWR fetches
+  // it once and caches — matching the old "only fetch if not already
+  // loaded" guard, without needing to track that manually.
+  const { data: habitsData } = useSWR<{ habits: Habit[] }>("/api/habits", fetcher);
+  const { data: logsData, mutate: mutateLogs } = useSWR<{ logs: HabitLog[] }>(
+    `/api/habits/logs?from=${from}&to=${to}`,
+    fetcher
+  );
 
-      if (habitsRes) {
-        const json = await habitsRes.json();
-        setHabits(json.habits ?? []);
-      }
-
-      const logsJson = await logsRes.json();
-      const map = new Map<string, CellState>();
-      (logsJson.logs as HabitLog[] | undefined)?.forEach((log) => {
-        map.set(`${log.habit_id}:${log.date}`, {
-          completed: log.completed,
-          excused: log.excused,
-          note: log.note,
-        });
+  const habits = habitsData?.habits ?? null;
+  const logsByKey = useMemo(() => {
+    const map = new Map<string, CellState>();
+    logsData?.logs.forEach((log) => {
+      map.set(`${log.habit_id}:${log.date}`, {
+        completed: log.completed,
+        excused: log.excused,
+        note: log.note,
       });
-      setLogsByKey(map);
-    }
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor.year, cursor.month, reloadToken]);
+    });
+    return map;
+  }, [logsData]);
 
   async function saveLeave() {
     if (leaveTo < leaveFrom) {
@@ -99,14 +93,22 @@ export function HabitGrid() {
       return;
     }
     setLeaveOpen(false);
-    setReloadToken((t) => t + 1);
+    mutateLogs();
     toast.success("Marked as leave — those days won't break your streaks.");
   }
 
   async function toggleCell(habitId: string, date: string, current: CellState | undefined) {
-    const key = `${habitId}:${date}`;
     const wasCompleted = current?.completed ?? false;
-    setLogsByKey((prev) => new Map(prev).set(key, { completed: !wasCompleted, excused: false, note: current?.note ?? null }));
+    const previous = logsData?.logs ?? [];
+    const rest = previous.filter((l) => !(l.habit_id === habitId && l.date === date));
+    const existing = previous.find((l) => l.habit_id === habitId && l.date === date);
+    const nextLog: HabitLog = {
+      ...(existing ?? { id: "", habit_id: habitId, date, logged_at: "", excused: false, note: null, completed: false }),
+      completed: !wasCompleted,
+      excused: false,
+    };
+
+    mutateLogs({ logs: [...rest, nextLog] }, { revalidate: false });
 
     const res = await fetch(`/api/habits/${habitId}/log`, {
       method: "POST",
@@ -115,7 +117,7 @@ export function HabitGrid() {
     });
 
     if (!res.ok) {
-      setLogsByKey((prev) => new Map(prev).set(key, current ?? { completed: false, excused: false, note: null }));
+      mutateLogs({ logs: previous }, { revalidate: false });
       toast.error("Couldn't save that — try again.");
     }
   }

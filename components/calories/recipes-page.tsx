@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { Plus, Trash2, ChefHat, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { computeRecipeNutrition } from "@/lib/calories/recipe-nutrition";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { Food, RecipeWithIngredients } from "@/lib/types/calories";
 
 type RecipeWithNutrition = RecipeWithIngredients & {
@@ -22,7 +24,11 @@ type RecipeWithNutrition = RecipeWithIngredients & {
 type DraftIngredient = { food: Food; quantity_g: string };
 
 export function RecipesPage() {
-  const [recipes, setRecipes] = useState<RecipeWithNutrition[] | null>(null);
+  const { data: recipesData, mutate: mutateRecipes } = useSWR<{ recipes: RecipeWithNutrition[] }>(
+    "/api/calories/recipes",
+    fetcher
+  );
+  const recipes = recipesData?.recipes ?? null;
   const [builderOpen, setBuilderOpen] = useState(false);
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -33,21 +39,6 @@ export function RecipesPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RecipeWithNutrition | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  async function loadRecipes() {
-    const res = await fetch("/api/calories/recipes");
-    const json = await res.json();
-    setRecipes(json.recipes ?? []);
-  }
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/calories/recipes");
-      const json = await res.json();
-      setRecipes(json.recipes ?? []);
-    }
-    load();
-  }, []);
 
   useEffect(() => {
     const trimmed = ingredientQuery.trim();
@@ -104,7 +95,7 @@ export function RecipesPage() {
     resetBuilder();
     setBuilderOpen(false);
     toast.success("Recipe saved.");
-    loadRecipes();
+    mutateRecipes();
   }
 
   async function handleDelete() {
@@ -116,7 +107,7 @@ export function RecipesPage() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setRecipes((prev) => prev?.filter((r) => r.id !== deleteTarget.id) ?? null);
+    mutateRecipes((prev) => prev && { recipes: prev.recipes.filter((r) => r.id !== deleteTarget.id) }, { revalidate: false });
     setDeleteTarget(null);
     toast.success("Deleted.");
   }

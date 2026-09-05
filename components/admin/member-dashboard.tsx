@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge, type StatusTone } from "@/components/shared/status-badge";
 import { HabitDashboard } from "@/components/habits/habit-dashboard-lazy";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { Habit, HabitLog } from "@/lib/types/habits";
 import type { Idea } from "@/lib/types/ideas";
 import type { ContentIdea } from "@/lib/types/content";
 import type { University, Task } from "@/lib/types/masters-abroad";
-import type { ToolKey } from "@/lib/types/admin";
+import type { Profile, ToolKey } from "@/lib/types/admin";
 import { LayoutGrid } from "lucide-react";
 
 type OutreachRow = {
@@ -93,17 +94,9 @@ function GroupedList<T extends { status: string }>({
 // embedded inline (edit-user.tsx, alongside the admin controls) and, via
 // MemberDashboard below, as a standalone page for a wider full-screen view.
 export function MemberDashboardContent({ userId }: { userId: string }) {
-  const [data, setData] = useState<MemberData | null>(null);
+  const { data } = useSWR<MemberData>(`/api/admin/users/${userId}/dashboard`, fetcher);
 
-  useEffect(() => {
-    async function load() {
-      const res = await fetch(`/api/admin/users/${userId}/dashboard`);
-      setData(await res.json());
-    }
-    load();
-  }, [userId]);
-
-  if (!data) {
+  if (data === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-64 w-full rounded-xl" />
@@ -255,16 +248,8 @@ export function MemberDashboardContent({ userId }: { userId: string }) {
 // button, for when the inline column (edit-user.tsx) is too cramped or the
 // admin wants to link directly to just this view.
 export function MemberDashboard({ userId }: { userId: string }) {
-  const [name, setName] = useState<string>("");
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch(`/api/admin/users/${userId}`);
-      const { profile } = await res.json();
-      setName(profile?.display_name || profile?.email || "");
-    }
-    load();
-  }, [userId]);
+  const { data } = useSWR<{ profile: Profile }>(`/api/admin/users/${userId}`, fetcher);
+  const name = data?.profile?.display_name || data?.profile?.email || "";
 
   return (
     <div className="flex flex-1 flex-col gap-6 pb-16">

@@ -31,6 +31,11 @@ export async function generateContent<T>(apiKey: string, prompt: string, schema:
       config: {
         responseMimeType: "application/json",
         responseSchema: jsonSchema,
+        // Every caller here wants a structured JSON extraction/synthesis
+        // from context already gathered (not open-ended reasoning), so the
+        // model's default "thinking" pass just adds latency without
+        // improving output — measured 6-27s per call before this change.
+        thinkingConfig: { thinkingBudget: 0 },
       },
     });
 

@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { Search, Star, Clock, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { LogPortionDialog } from "@/components/calories/log-portion-dialog";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { FoodWithServings, FoodLogWithItems, FoodFavouriteWithDetails } from "@/lib/types/calories";
 
 function FoodRow({ food, onSelect }: { food: FoodWithServings; onSelect: () => void }) {
@@ -30,20 +32,11 @@ function FoodRow({ food, onSelect }: { food: FoodWithServings; onSelect: () => v
 export function FoodSearch({ logDate, onLogged }: { logDate?: string; onLogged: (log: FoodLogWithItems) => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FoodWithServings[] | null>(null);
-  const [favourites, setFavourites] = useState<FoodFavouriteWithDetails[]>([]);
-  const [recents, setRecents] = useState<FoodWithServings[]>([]);
+  const { data: favData } = useSWR<{ favourites: FoodFavouriteWithDetails[] }>("/api/calories/favourites", fetcher);
+  const { data: recentData } = useSWR<{ foods: FoodWithServings[] }>("/api/calories/foods/recent", fetcher);
+  const favourites = (favData?.favourites ?? []).filter((f) => f.foods);
+  const recents = recentData?.foods ?? [];
   const [selected, setSelected] = useState<FoodWithServings | null>(null);
-
-  useEffect(() => {
-    async function loadDefaults() {
-      const [favRes, recentRes] = await Promise.all([fetch("/api/calories/favourites"), fetch("/api/calories/foods/recent")]);
-      const favJson = await favRes.json();
-      const recentJson = await recentRes.json();
-      setFavourites((favJson.favourites ?? []).filter((f: FoodFavouriteWithDetails) => f.foods));
-      setRecents(recentJson.foods ?? []);
-    }
-    loadDefaults();
-  }, []);
 
   useEffect(() => {
     const trimmed = query.trim();

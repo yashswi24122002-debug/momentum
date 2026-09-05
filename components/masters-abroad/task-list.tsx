@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, Lock, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,23 +12,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ListChecks } from "lucide-react";
+import { fetcher } from "@/lib/swr-fetcher";
 import { isTaskBlocked } from "@/lib/masters-abroad/dependencies";
 import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/masters-abroad/ui";
 import { cn } from "@/lib/utils";
 import type { Task, TaskCategory } from "@/lib/types/masters-abroad";
 
 export function TaskListPage() {
-  const [tasks, setTasks] = useState<Task[] | null>(null);
+  const { data, mutate } = useSWR<{ tasks: Task[] }>("/api/tasks", fetcher);
+  const tasks = data?.tasks;
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/tasks");
-      const json = await res.json();
-      setTasks(json.tasks ?? []);
-    }
-    load();
-  }, []);
 
   async function seedDefaults() {
     const res = await fetch("/api/tasks", {
@@ -41,7 +35,7 @@ export function TaskListPage() {
       return;
     }
     const { tasks: seeded } = await res.json();
-    setTasks(seeded);
+    mutate({ tasks: seeded }, { revalidate: false });
   }
 
   async function toggleDone(task: Task, allTasks: Task[]) {
@@ -50,10 +44,15 @@ export function TaskListPage() {
       toast.error("This task has unfinished dependencies.");
       return;
     }
-    const previous = tasks;
-    setTasks(
+    const previous = data;
+    mutate(
       (prev) =>
-        prev?.map((t) => (t.id === task.id ? { ...t, status: nextStatus, completed_at: nextStatus === "done" ? new Date().toISOString() : null } : t)) ?? null
+        prev && {
+          tasks: prev.tasks.map((t) =>
+            t.id === task.id ? { ...t, status: nextStatus, completed_at: nextStatus === "done" ? new Date().toISOString() : null } : t
+          ),
+        },
+      { revalidate: false }
     );
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
@@ -61,13 +60,13 @@ export function TaskListPage() {
       body: JSON.stringify({ status: nextStatus }),
     });
     if (!res.ok) {
-      setTasks(previous);
+      mutate(previous, { revalidate: false });
       const { error } = await res.json().catch(() => ({ error: "Couldn't update that task." }));
       toast.error(error);
     }
   }
 
-  if (tasks === null) {
+  if (tasks === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />

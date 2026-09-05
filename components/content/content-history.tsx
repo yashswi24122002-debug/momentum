@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { ContentIdeaCard } from "@/components/content/content-idea-card";
 import { RejectDialog } from "@/components/content/reject-dialog";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import type { StatusTone } from "@/components/shared/status-badge";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { ContentIdea, ContentRejectionReason } from "@/lib/types/content";
 
 type FilterTab = "all" | "pending" | "approved" | "rejected";
@@ -29,21 +31,14 @@ const STATUS_BADGES: Record<ContentIdea["status"], { label: string; tone: Status
 };
 
 export function ContentHistory() {
-  const [ideas, setIdeas] = useState<ContentIdea[] | null>(null);
+  const { data, mutate } = useSWR<{ content_ideas: ContentIdea[] }>("/api/content", fetcher);
+  const ideas = data?.content_ideas ?? null;
+
   const [tab, setTab] = useState<FilterTab>("all");
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<ContentIdea | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ContentIdea | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/content");
-      const json = await res.json();
-      setIdeas(json.content_ideas ?? []);
-    }
-    load();
-  }, []);
 
   async function handleApprove(idea: ContentIdea) {
     setApprovingId(idea.id);
@@ -55,7 +50,10 @@ export function ContentHistory() {
       return;
     }
     toast.success(`"${idea.title}" moved to backlog with a full report.`);
-    setIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, status: "approved" } : i)) ?? null);
+    mutate(
+      (prev) => prev && { content_ideas: prev.content_ideas.map((i) => (i.id === idea.id ? { ...i, status: "approved" } : i)) },
+      { revalidate: false }
+    );
   }
 
   async function handleReject(reason: ContentRejectionReason) {
@@ -71,8 +69,14 @@ export function ContentHistory() {
       toast.error("Couldn't reject that idea — try again.");
       return;
     }
-    setIdeas(
-      (prev) => prev?.map((i) => (i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i)) ?? null
+    mutate(
+      (prev) =>
+        prev && {
+          content_ideas: prev.content_ideas.map((i) =>
+            i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i
+          ),
+        },
+      { revalidate: false }
     );
   }
 
@@ -85,7 +89,9 @@ export function ContentHistory() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setIdeas((prev) => prev?.filter((i) => i.id !== deleteTarget.id) ?? null);
+    mutate((prev) => prev && { content_ideas: prev.content_ideas.filter((i) => i.id !== deleteTarget.id) }, {
+      revalidate: false,
+    });
     setDeleteTarget(null);
     toast.success("Deleted.");
   }

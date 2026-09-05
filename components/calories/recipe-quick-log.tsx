@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ChefHat, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { LogPortionDialog } from "@/components/calories/log-portion-dialog";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { RecipeWithIngredients, FoodLogWithItems } from "@/lib/types/calories";
 
 type RecipeWithNutrition = RecipeWithIngredients & {
@@ -14,17 +16,9 @@ type RecipeWithNutrition = RecipeWithIngredients & {
 };
 
 export function RecipeQuickLog({ logDate, onLogged }: { logDate?: string; onLogged: (log: FoodLogWithItems) => void }) {
-  const [recipes, setRecipes] = useState<RecipeWithNutrition[] | null>(null);
+  const { data } = useSWR<{ recipes: RecipeWithNutrition[] }>("/api/calories/recipes", fetcher);
+  const recipes = data?.recipes ?? null;
   const [selected, setSelected] = useState<RecipeWithNutrition | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/calories/recipes");
-      const json = await res.json();
-      setRecipes(json.recipes ?? []);
-    }
-    load();
-  }, []);
 
   if (recipes === null) return null;
 

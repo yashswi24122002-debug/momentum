@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, Sparkles, Loader2, Columns3 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,28 +14,21 @@ import { DiscoveryDialog } from "@/components/masters-abroad/discovery-dialog";
 import { ComparisonDialog } from "@/components/masters-abroad/comparison-dialog";
 import { DeadlineHints } from "@/components/masters-abroad/deadline-hints";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { fetcher } from "@/lib/swr-fetcher";
 import { UNIVERSITY_STATUS_ORDER, UNIVERSITY_STATUS_LABELS } from "@/lib/masters-abroad/ui";
 import type { University, UniversityStatus, DiscoveryProfile } from "@/lib/types/masters-abroad";
 
 const MAX_COMPARE = 3;
 
 export function UniversityBoard() {
-  const [universities, setUniversities] = useState<University[] | null>(null);
+  const { data, mutate } = useSWR<{ universities: University[] }>("/api/universities", fetcher);
+  const universities = data?.universities;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<University | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/universities");
-      const json = await res.json();
-      setUniversities(json.universities ?? []);
-    }
-    load();
-  }, []);
 
   async function handleDiscover(profile: DiscoveryProfile) {
     setDiscovering(true);
@@ -50,13 +44,13 @@ export function UniversityBoard() {
       return;
     }
     const { universities: found } = await res.json();
-    setUniversities((prev) => [...found, ...(prev ?? [])]);
+    mutate((prev) => ({ universities: [...found, ...(prev?.universities ?? [])] }), { revalidate: false });
     setDialogOpen(false);
     toast.success(`Found ${found.length} suggestions — review and verify before trusting any deadlines.`);
   }
 
   async function handleStatusChange(id: string, status: UniversityStatus) {
-    setUniversities((prev) => prev?.map((u) => (u.id === id ? { ...u, status } : u)) ?? null);
+    mutate((prev) => prev && { universities: prev.universities.map((u) => (u.id === id ? { ...u, status } : u)) }, { revalidate: false });
     const res = await fetch(`/api/universities/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -66,7 +60,7 @@ export function UniversityBoard() {
   }
 
   async function handleToggleVerified(id: string, verified: boolean) {
-    setUniversities((prev) => prev?.map((u) => (u.id === id ? { ...u, verified } : u)) ?? null);
+    mutate((prev) => prev && { universities: prev.universities.map((u) => (u.id === id ? { ...u, verified } : u)) }, { revalidate: false });
     const res = await fetch(`/api/universities/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -95,13 +89,13 @@ export function UniversityBoard() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setUniversities((prev) => prev?.filter((u) => u.id !== deleteTarget.id) ?? null);
+    mutate((prev) => prev && { universities: prev.universities.filter((u) => u.id !== deleteTarget.id) }, { revalidate: false });
     setSelectedIds((prev) => prev.filter((id) => id !== deleteTarget.id));
     setDeleteTarget(null);
     toast.success("Deleted.");
   }
 
-  if (universities === null) {
+  if (universities === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />

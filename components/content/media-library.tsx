@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import useSWR from "swr";
 import { ArrowLeft, Star, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,32 +12,23 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TripManager } from "@/components/content/trip-manager";
 import { MediaUpload } from "@/components/content/media-upload";
 import { MediaEditDialog } from "@/components/content/media-edit-dialog";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { Trip, MediaWithUrl } from "@/lib/types/content";
 
 export function MediaLibrary() {
-  const [trips, setTrips] = useState<Trip[] | null>(null);
-  const [media, setMedia] = useState<MediaWithUrl[] | null>(null);
   const [tripFilter, setTripFilter] = useState("all");
   const [worthyOnly, setWorthyOnly] = useState(false);
   const [editing, setEditing] = useState<MediaWithUrl | null>(null);
 
-  useEffect(() => {
-    fetch("/api/trips")
-      .then((r) => r.json())
-      .then((json) => setTrips(json.trips ?? []));
-  }, []);
+  const { data: tripsData, mutate: mutateTrips } = useSWR<{ trips: Trip[] }>("/api/trips", fetcher);
 
-  useEffect(() => {
-    async function load() {
-      const params = new URLSearchParams();
-      if (tripFilter !== "all") params.set("trip_id", tripFilter);
-      if (worthyOnly) params.set("content_worthy", "true");
-      const res = await fetch(`/api/media?${params}`);
-      const json = await res.json();
-      setMedia(json.media ?? []);
-    }
-    load();
-  }, [tripFilter, worthyOnly]);
+  const params = new URLSearchParams();
+  if (tripFilter !== "all") params.set("trip_id", tripFilter);
+  if (worthyOnly) params.set("content_worthy", "true");
+  const { data: mediaData, mutate: mutateMedia } = useSWR<{ media: MediaWithUrl[] }>(`/api/media?${params}`, fetcher);
+
+  const trips = tripsData?.trips ?? null;
+  const media = mediaData?.media ?? null;
 
   if (trips === null || media === null) {
     return (
@@ -57,10 +49,16 @@ export function MediaLibrary() {
         <h1 className="text-xl font-semibold text-text-primary">Media library</h1>
       </div>
 
-      <TripManager trips={trips} onCreated={(trip) => setTrips((prev) => [trip, ...(prev ?? [])])} />
+      <TripManager
+        trips={trips}
+        onCreated={(trip) => mutateTrips((prev) => prev && { trips: [trip, ...prev.trips] }, { revalidate: false })}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <MediaUpload trips={trips} onUploaded={(m) => setMedia((prev) => [m, ...(prev ?? [])])} />
+        <MediaUpload
+          trips={trips}
+          onUploaded={(m) => mutateMedia((prev) => prev && { media: [m, ...prev.media] }, { revalidate: false })}
+        />
         <div className="flex items-center gap-2">
           <Select value={tripFilter} onValueChange={(v) => setTripFilter(v ?? "all")}>
             <SelectTrigger className="w-44">
@@ -123,7 +121,11 @@ export function MediaLibrary() {
         media={editing}
         trips={trips}
         onOpenChange={(open) => !open && setEditing(null)}
-        onSaved={(updated) => setMedia((prev) => prev?.map((m) => (m.id === updated.id ? updated : m)) ?? null)}
+        onSaved={(updated) =>
+          mutateMedia((prev) => prev && { media: prev.media.map((m) => (m.id === updated.id ? updated : m)) }, {
+            revalidate: false,
+          })
+        }
       />
     </div>
   );

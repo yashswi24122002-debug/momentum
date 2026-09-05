@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, ListChecks, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,25 +10,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { fetcher } from "@/lib/swr-fetcher";
 import { APPLICATION_STAGE_ORDER, APPLICATION_STAGE_LABELS, APPLICATION_STAGE_TONES } from "@/lib/jobs/ui";
 import type { Application, ApplicationStage } from "@/lib/types/jobs";
 
 type ApplicationWithJob = Application & { job_postings: { company: string; role_title: string; url: string | null } | null };
 
 export function PipelineBoard() {
-  const [applications, setApplications] = useState<ApplicationWithJob[] | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/applications");
-      const json = await res.json();
-      setApplications(json.applications ?? []);
-    }
-    load();
-  }, []);
+  const { data, mutate } = useSWR<{ applications: ApplicationWithJob[] }>("/api/applications", fetcher);
+  const applications = data?.applications ?? null;
 
   async function handleStageChange(id: string, stage: ApplicationStage) {
-    setApplications((prev) => prev?.map((a) => (a.id === id ? { ...a, stage } : a)) ?? null);
+    mutate((prev) => prev && { applications: prev.applications.map((a) => (a.id === id ? { ...a, stage } : a)) }, {
+      revalidate: false,
+    });
     const res = await fetch(`/api/applications/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

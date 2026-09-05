@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { fetcher } from "@/lib/swr-fetcher";
 import { todayLocalISODate } from "@/lib/date";
 import type { Task, University } from "@/lib/types/masters-abroad";
 
@@ -16,35 +18,33 @@ type TimelineItem = { date: string; label: string; sublabel: string; trusted: bo
 const MONTH_FORMATTER = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
 
 export function Timeline() {
-  const [items, setItems] = useState<TimelineItem[] | null>(null);
+  const { data: tasksData } = useSWR<{ tasks: Task[] }>("/api/tasks", fetcher);
+  const { data: universitiesData } = useSWR<{ universities: University[] }>("/api/universities", fetcher);
 
-  useEffect(() => {
-    async function load() {
-      const [tasksRes, universitiesRes] = await Promise.all([fetch("/api/tasks"), fetch("/api/universities")]);
-      const tasks: Task[] = (await tasksRes.json()).tasks ?? [];
-      const universities: University[] = (await universitiesRes.json()).universities ?? [];
+  const items = useMemo<TimelineItem[] | undefined>(() => {
+    if (!tasksData || !universitiesData) return undefined;
+    const tasks = tasksData.tasks;
+    const universities = universitiesData.universities;
 
-      const taskItems: TimelineItem[] = tasks
-        .filter((t) => t.deadline && t.status !== "done")
-        .map((t) => ({ date: t.deadline as string, label: t.title, sublabel: "Task", trusted: true }));
+    const taskItems: TimelineItem[] = tasks
+      .filter((t) => t.deadline && t.status !== "done")
+      .map((t) => ({ date: t.deadline as string, label: t.title, sublabel: "Task", trusted: true }));
 
-      const uniItems: TimelineItem[] = universities.flatMap((u) => {
-        const entries: TimelineItem[] = [];
-        if (u.deadline_uni_assist) {
-          entries.push({ date: u.deadline_uni_assist, label: `${u.name} — uni-assist deadline`, sublabel: "University", trusted: u.verified });
-        }
-        if (u.deadline_direct) {
-          entries.push({ date: u.deadline_direct, label: `${u.name} — direct deadline`, sublabel: "University", trusted: u.verified });
-        }
-        return entries;
-      });
+    const uniItems: TimelineItem[] = universities.flatMap((u) => {
+      const entries: TimelineItem[] = [];
+      if (u.deadline_uni_assist) {
+        entries.push({ date: u.deadline_uni_assist, label: `${u.name} — uni-assist deadline`, sublabel: "University", trusted: u.verified });
+      }
+      if (u.deadline_direct) {
+        entries.push({ date: u.deadline_direct, label: `${u.name} — direct deadline`, sublabel: "University", trusted: u.verified });
+      }
+      return entries;
+    });
 
-      setItems([...taskItems, ...uniItems].sort((a, b) => a.date.localeCompare(b.date)));
-    }
-    load();
-  }, []);
+    return [...taskItems, ...uniItems].sort((a, b) => a.date.localeCompare(b.date));
+  }, [tasksData, universitiesData]);
 
-  if (items === null) {
+  if (items === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />

@@ -37,31 +37,21 @@ export async function checkAndIncrementUsage(
 
   const today = todayLocalISODate();
 
-  const { data: limitRow } = await supabase
-    .from("usage_limits")
-    .select("daily_limit")
-    .eq("user_id", userId)
-    .eq("feature_key", featureKey)
-    .maybeSingle();
-  const dailyLimit: number | null = limitRow?.daily_limit ?? null;
+  // Was 3 sequential round trips (select limit, select counter, upsert
+  // counter) — a real cost on top of an already-slow free-tier Supabase
+  // project, on every single AI call. check_and_increment_usage() does the
+  // whole read-check-write in one round trip via RPC.
+  const { data, error } = await supabase
+    .rpc("check_and_increment_usage", {
+      p_user_id: userId,
+      p_feature_key: featureKey,
+      p_weight: weight,
+      p_today: today,
+    })
+    .single<{ allowed: boolean; daily_limit: number | null; new_count: number }>();
 
-  const { data: counterRow } = await supabase
-    .from("usage_counters")
-    .select("count")
-    .eq("user_id", userId)
-    .eq("feature_key", featureKey)
-    .eq("usage_date", today)
-    .maybeSingle();
-  const currentCount = counterRow?.count ?? 0;
-
-  if (dailyLimit !== null && currentCount + weight > dailyLimit) {
-    throw new UsageLimitExceededError(dailyLimit);
+  if (error) throw error;
+  if (!data.allowed) {
+    throw new UsageLimitExceededError(data.daily_limit!);
   }
-
-  await supabase
-    .from("usage_counters")
-    .upsert(
-      { user_id: userId, feature_key: featureKey, usage_date: today, count: currentCount + weight },
-      { onConflict: "user_id,feature_key,usage_date" }
-    );
 }

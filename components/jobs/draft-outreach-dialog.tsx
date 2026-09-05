@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { ResumeWithUrl } from "@/lib/types/jobs";
 
 const NO_RESUME = "__none__";
@@ -24,18 +26,12 @@ export function DraftOutreachDialog({
   jobTitle: string;
   preselectedContactName?: string | null;
 }) {
-  const [resumes, setResumes] = useState<ResumeWithUrl[]>([]);
+  // Only fetches while the dialog is open (null key disables the request);
+  // SWR's cache means re-opening the dialog later shows resumes instantly
+  // instead of re-fetching every time.
+  const { data } = useSWR<{ resumes: ResumeWithUrl[] }>(open ? "/api/resumes" : null, fetcher);
+  const resumes = data?.resumes ?? [];
   const [resumeId, setResumeId] = useState<string>(NO_RESUME);
-
-  useEffect(() => {
-    if (!open) return;
-    async function load() {
-      const res = await fetch("/api/resumes");
-      const json = await res.json();
-      setResumes(json.resumes ?? []);
-    }
-    load();
-  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

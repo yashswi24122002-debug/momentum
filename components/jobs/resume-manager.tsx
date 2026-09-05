@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, Upload, Loader2, FileText, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,24 +11,17 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { ResumeWithUrl } from "@/lib/types/jobs";
 
 const BUCKET = "documents";
 
 export function ResumeManager() {
-  const [resumes, setResumes] = useState<ResumeWithUrl[] | null>(null);
+  const { data, mutate } = useSWR<{ resumes: ResumeWithUrl[] }>("/api/resumes", fetcher);
+  const resumes = data?.resumes ?? null;
   const [uploading, setUploading] = useState(false);
   const [focusArea, setFocusArea] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/resumes");
-      const json = await res.json();
-      setResumes(json.resumes ?? []);
-    }
-    load();
-  }, []);
 
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -49,7 +43,7 @@ export function ResumeManager() {
       if (!res.ok) throw new Error("insert failed");
 
       const { resume } = await res.json();
-      setResumes((prev) => [resume, ...(prev ?? [])]);
+      mutate((prev) => prev && { resumes: [resume, ...prev.resumes] }, { revalidate: false });
       setFocusArea("");
     } catch {
       toast.error("Upload failed — try again.");

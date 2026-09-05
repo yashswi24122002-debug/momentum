@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -14,9 +15,21 @@ import type { Profile, ToolKey } from "@/lib/types/admin";
  */
 export async function requireAdmin() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+
+  // Same header-trust as requireUser() — the proxy already ran
+  // auth.getUser() for this request; this just avoids repeating it. The
+  // profile row itself still gets fetched fresh below (real business data,
+  // not a redundant check).
+  const headerList = await headers();
+  const headerUserId = headerList.get("x-momentum-user-id");
+
+  let user: User | null;
+  if (headerUserId !== null) {
+    user = { id: headerUserId, email: headerList.get("x-momentum-user-email") || undefined } as User;
+  } else {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  }
 
   if (!user) {
     return { supabase, user: null, profile: null, unauthorized: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };

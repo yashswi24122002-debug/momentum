@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { Plus, Trash2, Pencil, GripVertical, ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import { Plus, Trash2, Pencil, GripVertical, ChevronLeft, ChevronRight, Flame, Plane, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -59,6 +59,7 @@ type DashboardData = {
   consumed: NutritionTotals;
   remaining: number | null;
   mealGroups: MealGroup[];
+  leave: { note: string | null } | null;
 };
 
 function DroppableMealSection({ mealType, children }: { mealType: MealType; children: React.ReactNode }) {
@@ -164,7 +165,47 @@ export function CaloriesDashboard() {
   const [editTarget, setEditTarget] = useState<{ logId: string; item: FoodLogItem } | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveFrom, setLeaveFrom] = useState(date);
+  const [leaveTo, setLeaveTo] = useState(date);
+  const [leaveNote, setLeaveNote] = useState("Vacation");
+  const [savingLeave, setSavingLeave] = useState(false);
+  const [unmarking, setUnmarking] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  async function saveLeave() {
+    if (leaveTo < leaveFrom) {
+      toast.error("End date must be on or after the start date.");
+      return;
+    }
+    setSavingLeave(true);
+    const res = await fetch("/api/calories/leave", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date_from: leaveFrom, date_to: leaveTo, note: leaveNote || null }),
+    });
+    setSavingLeave(false);
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "Couldn't mark that as leave — try again." }));
+      toast.error(error);
+      return;
+    }
+    setLeaveOpen(false);
+    mutate();
+    toast.success("Marked as leave.");
+  }
+
+  async function unmarkLeave() {
+    setUnmarking(true);
+    const res = await fetch(`/api/calories/leave?date=${date}`, { method: "DELETE" });
+    setUnmarking(false);
+    if (!res.ok) {
+      toast.error("Couldn't undo that — try again.");
+      return;
+    }
+    mutate();
+    toast.success("Leave removed.");
+  }
 
   async function handleDeleteLog(id: string) {
     const res = await fetch(`/api/calories/logs/${id}`, { method: "DELETE" });
@@ -376,16 +417,46 @@ export function CaloriesDashboard() {
         </Button>
       </div>
 
-      <Card className="items-center gap-4 border-border bg-surface p-5">
-        <CalorieRing consumed={data.consumed.kcal} goal={data.settings.daily_calorie_goal} />
-        <div className="grid w-full grid-cols-3 gap-3">
-          <MacroBar label="Protein" value={data.consumed.protein_g} goal={data.settings.protein_goal_g} />
-          <MacroBar label="Carbs" value={data.consumed.carbs_g} goal={data.settings.carbs_goal_g} />
-          <MacroBar label="Fat" value={data.consumed.fat_g} goal={data.settings.fat_goal_g} />
-        </div>
-      </Card>
+      {data.leave ? (
+        <Card className="items-center gap-2 border-border bg-surface p-5 text-center">
+          <Plane className="size-5 text-text-muted" />
+          <p className="text-sm text-text-primary">Marked as leave{data.leave.note ? ` — ${data.leave.note}` : ""}</p>
+          <p className="text-xs text-text-muted">Not counted toward averages or goal history.</p>
+          <Button variant="outline" size="sm" onClick={unmarkLeave} disabled={unmarking}>
+            <X className="size-3.5" />
+            {unmarking ? "Removing…" : "Unmark leave"}
+          </Button>
+        </Card>
+      ) : (
+        <>
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-text-muted"
+              onClick={() => {
+                setLeaveFrom(date);
+                setLeaveTo(date);
+                setLeaveOpen(true);
+              }}
+            >
+              <Plane className="size-3.5" />
+              Mark leave
+            </Button>
+          </div>
 
-      {data.mealGroups.length === 0 ? (
+          <Card className="items-center gap-4 border-border bg-surface p-5">
+            <CalorieRing consumed={data.consumed.kcal} goal={data.settings.daily_calorie_goal} />
+            <div className="grid w-full grid-cols-3 gap-3">
+              <MacroBar label="Protein" value={data.consumed.protein_g} goal={data.settings.protein_goal_g} />
+              <MacroBar label="Carbs" value={data.consumed.carbs_g} goal={data.settings.carbs_goal_g} />
+              <MacroBar label="Fat" value={data.consumed.fat_g} goal={data.settings.fat_goal_g} />
+            </div>
+          </Card>
+        </>
+      )}
+
+      {data.leave ? null : data.mealGroups.length === 0 ? (
         <EmptyState icon={Flame} title="Nothing logged yet" description="Tap Add Food to log your first meal for this day." />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -479,6 +550,36 @@ export function CaloriesDashboard() {
             <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
             <Button onClick={handleSaveEdit} disabled={savingEdit}>
               {savingEdit ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark as leave</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cal-leave-from">From</Label>
+                <Input id="cal-leave-from" type="date" value={leaveFrom} max={todayLocalISODate()} onChange={(e) => setLeaveFrom(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cal-leave-to">To</Label>
+                <Input id="cal-leave-to" type="date" value={leaveTo} max={todayLocalISODate()} onChange={(e) => setLeaveTo(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cal-leave-note">Note</Label>
+              <Input id="cal-leave-note" value={leaveNote} onChange={(e) => setLeaveNote(e.target.value)} placeholder="Vacation" />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button onClick={saveLeave} disabled={savingLeave}>
+              {savingLeave ? "Saving…" : "Mark as leave"}
             </Button>
           </DialogFooter>
         </DialogContent>

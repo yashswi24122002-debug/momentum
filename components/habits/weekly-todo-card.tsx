@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetcher } from "@/lib/swr-fetcher";
 import { startOfWeekMonday } from "@/lib/date";
 import type { WeeklyTodoTask } from "@/lib/types/habits";
+
+type WeeklyTodoResponse = {
+  weekly_todo: { top_priority: string | null; top_3_tasks: WeeklyTodoTask[] } | null;
+};
 
 const MIN_TASK_SLOTS = 3;
 
@@ -19,23 +25,27 @@ function withMinSlots(tasks: WeeklyTodoTask[]): WeeklyTodoTask[] {
 }
 
 export function WeeklyTodoCard() {
-  const [loaded, setLoaded] = useState(false);
+  const [weekStart] = useState(() => startOfWeekMonday(new Date()));
+  const { data } = useSWR<WeeklyTodoResponse>(`/api/weekly-todos?week_start=${weekStart}`, fetcher);
+
   const [priority, setPriority] = useState("");
   const [tasks, setTasks] = useState<WeeklyTodoTask[]>(withMinSlots([]));
-  const [weekStart] = useState(() => startOfWeekMonday(new Date()));
+  // The fetched data is only used to seed these editable fields once —
+  // after that, local state (edited via onChange/onBlur below) is the
+  // source of truth, so a background revalidation doesn't clobber
+  // in-progress edits.
+  const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      const res = await fetch(`/api/weekly-todos?week_start=${weekStart}`);
-      const json = await res.json();
-      if (json.weekly_todo) {
-        setPriority(json.weekly_todo.top_priority ?? "");
-        setTasks(withMinSlots(json.weekly_todo.top_3_tasks ?? []));
-      }
-      setLoaded(true);
+  // Adjust state during render (React's documented escape hatch for
+  // seeding state from an async value) instead of an effect, so this
+  // only ever fires once per mount, right before the seeded render paints.
+  if (!hydrated && data !== undefined) {
+    setHydrated(true);
+    if (data.weekly_todo) {
+      setPriority(data.weekly_todo.top_priority ?? "");
+      setTasks(withMinSlots(data.weekly_todo.top_3_tasks ?? []));
     }
-    load();
-  }, [weekStart]);
+  }
 
   async function save(next: { top_priority?: string; top_3_tasks?: WeeklyTodoTask[] }) {
     const res = await fetch("/api/weekly-todos", {
@@ -82,7 +92,7 @@ export function WeeklyTodoCard() {
     });
   }
 
-  if (!loaded) {
+  if (data === undefined) {
     return <Skeleton className="h-48 w-full rounded-xl" />;
   }
 

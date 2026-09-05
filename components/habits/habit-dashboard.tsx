@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import useSWR from "swr";
 import {
   ResponsiveContainer,
   LineChart,
@@ -18,6 +19,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetcher } from "@/lib/swr-fetcher";
 import { todayLocalISODate } from "@/lib/date";
 import { ContributionHeatmap } from "@/components/habits/contribution-heatmap";
 import {
@@ -51,22 +53,17 @@ export function HabitDashboard({
   preloadedHabits,
   preloadedLogs,
 }: { preloadedHabits?: Habit[]; preloadedLogs?: HabitLog[] } = {}) {
-  const [habits, setHabits] = useState<Habit[] | null>(preloadedHabits ?? null);
-  const [logs, setLogs] = useState<HabitLog[] | null>(preloadedLogs ?? null);
   const today = todayLocalISODate();
+  const skipFetch = Boolean(preloadedHabits && preloadedLogs);
 
-  useEffect(() => {
-    if (preloadedHabits && preloadedLogs) return;
-    async function load() {
-      const [habitsRes, logsRes] = await Promise.all([
-        fetch("/api/habits"),
-        fetch(`/api/habits/logs?from=2000-01-01&to=${today}`),
-      ]);
-      setHabits((await habitsRes.json()).habits ?? []);
-      setLogs((await logsRes.json()).logs ?? []);
-    }
-    load();
-  }, [today, preloadedHabits, preloadedLogs]);
+  const { data: habitsData } = useSWR<{ habits: Habit[] }>(skipFetch ? null : "/api/habits", fetcher);
+  const { data: logsData } = useSWR<{ logs: HabitLog[] }>(
+    skipFetch ? null : `/api/habits/logs?from=2000-01-01&to=${today}`,
+    fetcher
+  );
+
+  const habits = skipFetch ? preloadedHabits! : (habitsData?.habits ?? null);
+  const logs = skipFetch ? preloadedLogs! : (logsData?.logs ?? null);
 
   const trend = useMemo(
     () => (habits && logs ? weeklyCompletionTrend(habits, logs, today) : []),

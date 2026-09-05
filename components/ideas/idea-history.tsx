@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { IdeaCard } from "@/components/ideas/idea-card";
 import { RejectDialog } from "@/components/ideas/reject-dialog";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import type { StatusTone } from "@/components/shared/status-badge";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { Idea, RejectionReason } from "@/lib/types/ideas";
 
 type FilterTab = "all" | "pending" | "approved" | "rejected" | "saved";
@@ -30,21 +32,13 @@ const STATUS_BADGES: Record<Idea["status"], { label: string; tone: StatusTone }>
 };
 
 export function IdeaHistory() {
-  const [ideas, setIdeas] = useState<Idea[] | null>(null);
+  const { data: ideasData, mutate: mutateIdeas } = useSWR<{ ideas: Idea[] }>("/api/ideas", fetcher);
+  const ideas = ideasData?.ideas ?? null;
   const [tab, setTab] = useState<FilterTab>("all");
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Idea | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Idea | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/ideas");
-      const json = await res.json();
-      setIdeas(json.ideas ?? []);
-    }
-    load();
-  }, []);
 
   async function handleApprove(idea: Idea) {
     setApprovingId(idea.id);
@@ -56,7 +50,9 @@ export function IdeaHistory() {
       return;
     }
     toast.success(`"${idea.title}" moved to backlog with a full report.`);
-    setIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, status: "approved" } : i)) ?? null);
+    mutateIdeas((prev) => prev && { ideas: prev.ideas.map((i) => (i.id === idea.id ? { ...i, status: "approved" } : i)) }, {
+      revalidate: false,
+    });
   }
 
   async function handleReject(reason: RejectionReason) {
@@ -72,19 +68,27 @@ export function IdeaHistory() {
       toast.error("Couldn't reject that idea — try again.");
       return;
     }
-    setIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i)) ?? null);
+    mutateIdeas(
+      (prev) =>
+        prev && { ideas: prev.ideas.map((i) => (i.id === idea.id ? { ...i, status: "rejected", rejection_reason: reason } : i)) },
+      { revalidate: false }
+    );
   }
 
   async function handleToggleSave(idea: Idea) {
     const nextSaved = !idea.saved;
-    setIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, saved: nextSaved } : i)) ?? null);
+    mutateIdeas((prev) => prev && { ideas: prev.ideas.map((i) => (i.id === idea.id ? { ...i, saved: nextSaved } : i)) }, {
+      revalidate: false,
+    });
     const res = await fetch(`/api/ideas/${idea.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ saved: nextSaved }),
     });
     if (!res.ok) {
-      setIdeas((prev) => prev?.map((i) => (i.id === idea.id ? { ...i, saved: idea.saved } : i)) ?? null);
+      mutateIdeas((prev) => prev && { ideas: prev.ideas.map((i) => (i.id === idea.id ? { ...i, saved: idea.saved } : i)) }, {
+        revalidate: false,
+      });
       toast.error("Couldn't save that — try again.");
     }
   }
@@ -98,7 +102,7 @@ export function IdeaHistory() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setIdeas((prev) => prev?.filter((i) => i.id !== deleteTarget.id) ?? null);
+    mutateIdeas((prev) => prev && { ideas: prev.ideas.filter((i) => i.id !== deleteTarget.id) }, { revalidate: false });
     setDeleteTarget(null);
     toast.success("Deleted.");
   }

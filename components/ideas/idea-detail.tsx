@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { ArrowLeft, Info, Download, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LIFECYCLE_ORDER, LIFECYCLE_LABELS, parseSignalSource } from "@/lib/ideas/ui";
 import { exportIdeaReportPdf } from "@/lib/ideas/export-pdf";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { Idea, IdeaReport, IdeaLifecycleStatus } from "@/lib/types/ideas";
 
 type IdeaWithReports = Idea & { idea_reports: IdeaReport[] };
@@ -28,28 +30,28 @@ const REPORT_FIELDS: { key: keyof IdeaReport; label: string }[] = [
 
 export function IdeaDetail({ ideaId }: { ideaId: string }) {
   const router = useRouter();
-  const [idea, setIdea] = useState<IdeaWithReports | null | undefined>(undefined);
+  const { data, error, mutate } = useSWR<{ idea: IdeaWithReports }>(`/api/ideas/${ideaId}`, fetcher);
+  const idea = data?.idea;
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    fetch(`/api/ideas/${ideaId}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((json) => setIdea(json.idea))
-      .catch(() => setIdea(null));
-  }, [ideaId]);
-
   async function handleStatusChange(reportId: string, status: IdeaLifecycleStatus) {
     if (!idea) return;
-    const previous = idea;
-    setIdea({ ...idea, idea_reports: idea.idea_reports.map((r) => (r.id === reportId ? { ...r, lifecycle_status: status } : r)) });
+    const previous = data;
+    mutate(
+      (prev) =>
+        prev && {
+          idea: { ...prev.idea, idea_reports: prev.idea.idea_reports.map((r) => (r.id === reportId ? { ...r, lifecycle_status: status } : r)) },
+        },
+      { revalidate: false }
+    );
     const res = await fetch(`/api/idea-reports/${reportId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lifecycle_status: status }),
     });
     if (!res.ok) {
-      setIdea(previous);
+      mutate(previous, { revalidate: false });
       toast.error("Couldn't update the stage — try again.");
     }
   }
@@ -66,7 +68,7 @@ export function IdeaDetail({ ideaId }: { ideaId: string }) {
     router.push("/ideas");
   }
 
-  if (idea === undefined) {
+  if (idea === undefined && !error) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
@@ -75,7 +77,7 @@ export function IdeaDetail({ ideaId }: { ideaId: string }) {
     );
   }
 
-  if (idea === null) {
+  if (!idea || error) {
     return <p className="text-sm text-text-secondary">Idea not found.</p>;
   }
 

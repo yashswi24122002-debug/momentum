@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { GraduationCap, ListChecks, CalendarDays, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import { fetcher } from "@/lib/swr-fetcher";
 import { addDays, todayLocalISODate } from "@/lib/date";
 import type { Task, University } from "@/lib/types/masters-abroad";
 
@@ -17,19 +18,13 @@ const QUICK_LINKS = [
 ];
 
 export function MastersAbroadDashboard() {
-  const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [universities, setUniversities] = useState<University[] | null>(null);
+  const { data: tasksData } = useSWR<{ tasks: Task[] }>("/api/tasks", fetcher);
+  const { data: universitiesData } = useSWR<{ universities: University[] }>("/api/universities", fetcher);
 
-  useEffect(() => {
-    async function load() {
-      const [tasksRes, universitiesRes] = await Promise.all([fetch("/api/tasks"), fetch("/api/universities")]);
-      setTasks((await tasksRes.json()).tasks ?? []);
-      setUniversities((await universitiesRes.json()).universities ?? []);
-    }
-    load();
-  }, []);
+  const tasks = tasksData?.tasks;
+  const universities = universitiesData?.universities;
 
-  if (tasks === null || universities === null) {
+  if (tasks === undefined || universities === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-24 w-full rounded-xl" />

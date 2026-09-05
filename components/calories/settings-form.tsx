@@ -1,37 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetcher } from "@/lib/swr-fetcher";
 import { todayLocalISODate } from "@/lib/date";
 import type { CalorieSettings } from "@/lib/types/calories";
 
 export function SettingsForm({ onSaved }: { onSaved?: (settings: CalorieSettings) => void }) {
-  const [settings, setSettings] = useState<CalorieSettings | null | undefined>(undefined);
+  const { data: settingsData, mutate: mutateSettings } = useSWR<{ settings: CalorieSettings | null }>(
+    "/api/calories/settings",
+    fetcher
+  );
+  const settings = settingsData?.settings ?? null;
   const [goal, setGoal] = useState("2000");
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/calories/settings");
-      const json = await res.json();
-      setSettings(json.settings ?? null);
-      if (json.settings) {
-        setGoal(String(json.settings.daily_calorie_goal));
-        setProtein(json.settings.protein_goal_g ? String(json.settings.protein_goal_g) : "");
-        setCarbs(json.settings.carbs_goal_g ? String(json.settings.carbs_goal_g) : "");
-        setFat(json.settings.fat_goal_g ? String(json.settings.fat_goal_g) : "");
-      }
+  // Sync the form fields from fetched/mutated settings during render (not in
+  // an effect) — React's recommended pattern for adjusting state when a value
+  // from an external source changes, avoiding an extra render pass.
+  const [syncedSettingsData, setSyncedSettingsData] = useState(settingsData);
+  if (settingsData !== syncedSettingsData) {
+    setSyncedSettingsData(settingsData);
+    if (settingsData?.settings) {
+      setGoal(String(settingsData.settings.daily_calorie_goal));
+      setProtein(settingsData.settings.protein_goal_g ? String(settingsData.settings.protein_goal_g) : "");
+      setCarbs(settingsData.settings.carbs_goal_g ? String(settingsData.settings.carbs_goal_g) : "");
+      setFat(settingsData.settings.fat_goal_g ? String(settingsData.settings.fat_goal_g) : "");
     }
-    load();
-  }, []);
+  }
 
   async function handleSave() {
     const dailyGoal = Number(goal);
@@ -59,12 +64,12 @@ export function SettingsForm({ onSaved }: { onSaved?: (settings: CalorieSettings
       return;
     }
     const { settings: updated } = await res.json();
-    setSettings(updated);
+    mutateSettings({ settings: updated }, { revalidate: false });
     toast.success("Saved.");
     onSaved?.(updated);
   }
 
-  if (settings === undefined) {
+  if (settingsData === undefined) {
     return <Skeleton className="h-64 w-full rounded-xl" />;
   }
 

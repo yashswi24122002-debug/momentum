@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { ArrowLeft, Upload, Loader2, FileText, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,23 +10,16 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { createClient } from "@/lib/supabase/client";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { DocumentWithUrl } from "@/lib/types/masters-abroad";
 
 const BUCKET = "documents";
 
 export function DocumentVault() {
-  const [documents, setDocuments] = useState<DocumentWithUrl[] | null>(null);
+  const { data, mutate } = useSWR<{ documents: DocumentWithUrl[] }>("/api/documents", fetcher);
+  const documents = data?.documents;
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/documents");
-      const json = await res.json();
-      setDocuments(json.documents ?? []);
-    }
-    load();
-  }, []);
 
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -48,7 +42,7 @@ export function DocumentVault() {
         if (!res.ok) throw new Error("insert failed");
 
         const { document } = await res.json();
-        setDocuments((prev) => [document, ...(prev ?? [])]);
+        mutate((prev) => ({ documents: [document, ...(prev?.documents ?? [])] }), { revalidate: false });
       } catch {
         failures++;
       }
@@ -59,7 +53,7 @@ export function DocumentVault() {
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  if (documents === null) {
+  if (documents === undefined) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />

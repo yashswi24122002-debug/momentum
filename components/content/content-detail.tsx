@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { ArrowLeft, ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { fetcher } from "@/lib/swr-fetcher";
 import { LIFECYCLE_ORDER, LIFECYCLE_LABELS } from "@/lib/content/ui";
 import type { ContentIdea, ContentReport, ContentLifecycleStatus, MediaWithUrl } from "@/lib/types/content";
 
@@ -28,31 +30,33 @@ const REPORT_FIELDS: { key: keyof ContentReport; label: string }[] = [
 
 export function ContentDetail({ ideaId }: { ideaId: string }) {
   const router = useRouter();
-  const [idea, setIdea] = useState<ContentIdeaDetail | null | undefined>(undefined);
+  const { data, error, mutate } = useSWR<{ content_idea: ContentIdeaDetail }>(`/api/content/${ideaId}`, fetcher);
+  const idea = data?.content_idea;
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    fetch(`/api/content/${ideaId}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((json) => setIdea(json.content_idea))
-      .catch(() => setIdea(null));
-  }, [ideaId]);
-
   async function handleStatusChange(reportId: string, status: ContentLifecycleStatus) {
     if (!idea) return;
-    const previous = idea;
-    setIdea({
-      ...idea,
-      content_reports: idea.content_reports.map((r) => (r.id === reportId ? { ...r, lifecycle_status: status } : r)),
-    });
+    const previous = data;
+    mutate(
+      (prev) =>
+        prev && {
+          content_idea: {
+            ...prev.content_idea,
+            content_reports: prev.content_idea.content_reports.map((r) =>
+              r.id === reportId ? { ...r, lifecycle_status: status } : r
+            ),
+          },
+        },
+      { revalidate: false }
+    );
     const res = await fetch(`/api/content-reports/${reportId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ lifecycle_status: status }),
     });
     if (!res.ok) {
-      setIdea(previous);
+      mutate(previous, { revalidate: false });
       toast.error("Couldn't update the stage — try again.");
     }
   }
@@ -69,7 +73,7 @@ export function ContentDetail({ ideaId }: { ideaId: string }) {
     router.push("/content");
   }
 
-  if (idea === undefined) {
+  if (data === undefined && !error) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
@@ -78,7 +82,7 @@ export function ContentDetail({ ideaId }: { ideaId: string }) {
     );
   }
 
-  if (idea === null) {
+  if (error || !idea) {
     return <p className="text-sm text-text-secondary">Idea not found.</p>;
   }
 

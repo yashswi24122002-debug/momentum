@@ -1,25 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { Plus, ShieldCheck, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { Profile } from "@/lib/types/admin";
 
 export function UsersList() {
-  const [users, setUsers] = useState<Profile[] | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      const res = await fetch("/api/admin/users");
-      const json = await res.json();
-      setUsers(json.users ?? []);
-    }
-    load();
-  }, []);
+  const { data } = useSWR<{ users: Profile[] }>("/api/admin/users", fetcher);
+  const users = data?.users ?? null;
 
   if (users === null) {
     return <Skeleton className="h-64 w-full rounded-xl" />;

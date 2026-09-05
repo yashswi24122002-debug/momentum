@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { Plus, Star, Trash2, Soup, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { SOURCE_LABELS, CONFIDENCE_TONES } from "@/lib/calories/ui";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { FoodWithServings } from "@/lib/types/calories";
 
 const EMPTY_FORM = {
@@ -43,10 +45,23 @@ type FetchedDetails = {
   note: string;
 };
 
+type FavouriteRow = { food_id: string | null };
+
 export function FoodsPage() {
-  const [personalFoods, setPersonalFoods] = useState<FoodWithServings[] | null>(null);
-  const [catalogue, setCatalogue] = useState<FoodWithServings[] | null>(null);
-  const [favouriteIds, setFavouriteIds] = useState<Set<string>>(new Set());
+  const { data: personalData, mutate: mutatePersonal } = useSWR<{ foods: FoodWithServings[] }>(
+    "/api/calories/foods?personalOnly=true",
+    fetcher
+  );
+  const { data: catalogueData, mutate: mutateCatalogue } = useSWR<{ foods: FoodWithServings[] }>(
+    "/api/calories/foods?indianOnly=true",
+    fetcher
+  );
+  const { data: favData, mutate: mutateFav } = useSWR<{ favourites: FavouriteRow[] }>("/api/calories/favourites", fetcher);
+  const personalFoods = personalData?.foods ?? null;
+  const catalogue = catalogueData?.foods ?? null;
+  const favouriteIds = new Set(
+    (favData?.favourites ?? []).filter((f) => f.food_id).map((f) => f.food_id as string)
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -55,35 +70,8 @@ export function FoodsPage() {
   const [fetchingDetails, setFetchingDetails] = useState(false);
 
   async function loadAll() {
-    const [personalRes, catalogueRes, favRes] = await Promise.all([
-      fetch("/api/calories/foods?personalOnly=true"),
-      fetch("/api/calories/foods?indianOnly=true"),
-      fetch("/api/calories/favourites"),
-    ]);
-    const personalJson = await personalRes.json();
-    const catalogueJson = await catalogueRes.json();
-    const favJson = await favRes.json();
-    setPersonalFoods(personalJson.foods ?? []);
-    setCatalogue(catalogueJson.foods ?? []);
-    setFavouriteIds(new Set((favJson.favourites ?? []).filter((f: { food_id: string | null }) => f.food_id).map((f: { food_id: string }) => f.food_id)));
+    await Promise.all([mutatePersonal(), mutateCatalogue(), mutateFav()]);
   }
-
-  useEffect(() => {
-    async function load() {
-      const [personalRes, catalogueRes, favRes] = await Promise.all([
-        fetch("/api/calories/foods?personalOnly=true"),
-        fetch("/api/calories/foods?indianOnly=true"),
-        fetch("/api/calories/favourites"),
-      ]);
-      const personalJson = await personalRes.json();
-      const catalogueJson = await catalogueRes.json();
-      const favJson = await favRes.json();
-      setPersonalFoods(personalJson.foods ?? []);
-      setCatalogue(catalogueJson.foods ?? []);
-      setFavouriteIds(new Set((favJson.favourites ?? []).filter((f: { food_id: string | null }) => f.food_id).map((f: { food_id: string }) => f.food_id)));
-    }
-    load();
-  }, []);
 
   async function toggleFavourite(food: FoodWithServings) {
     const isFav = favouriteIds.has(food.id);
@@ -96,12 +84,13 @@ export function FoodsPage() {
       toast.error("Couldn't update favourites — try again.");
       return;
     }
-    setFavouriteIds((prev) => {
-      const next = new Set(prev);
-      if (isFav) next.delete(food.id);
-      else next.add(food.id);
-      return next;
-    });
+    mutateFav(
+      (prev) =>
+        prev && {
+          favourites: isFav ? prev.favourites.filter((f) => f.food_id !== food.id) : [...prev.favourites, { food_id: food.id }],
+        },
+      { revalidate: false }
+    );
   }
 
   async function handleFetchDetails() {
@@ -181,7 +170,7 @@ export function FoodsPage() {
       toast.error("Couldn't delete that — try again.");
       return;
     }
-    setPersonalFoods((prev) => prev?.filter((f) => f.id !== deleteTarget.id) ?? null);
+    mutatePersonal((prev) => prev && { foods: prev.foods.filter((f) => f.id !== deleteTarget.id) }, { revalidate: false });
     setDeleteTarget(null);
     toast.success("Deleted.");
   }
