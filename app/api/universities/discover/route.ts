@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
-import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 import { matchCuratedUniversity } from "@/lib/masters-abroad/curated-universities";
 import { DISCOVERY_COURSE_PROMPT } from "@/lib/masters-abroad/ui";
@@ -53,9 +53,8 @@ export async function POST(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const isAdmin = await checkIsAdmin(supabase, user);
-  let apiKey: string;
   try {
-    apiKey = await resolveGeminiApiKey(user.id, isAdmin);
+    await resolveGeminiApiKey(user.id, isAdmin); // fails fast if no key is configured, before any other work
     await checkAndIncrementUsage(supabase, user.id, "masters_discover", isAdmin, SUGGESTION_COUNT);
   } catch (error) {
     if (error instanceof NoApiKeyError || error instanceof UsageLimitExceededError) {
@@ -79,7 +78,7 @@ export async function POST(request: NextRequest) {
 
   let suggestions: z.infer<typeof DiscoveryResponseSchema>;
   try {
-    suggestions = await generateContent(apiKey, buildPrompt(course, profile, excludeNames), DiscoveryResponseSchema);
+    suggestions = await generateContentAsUser(user.id, isAdmin, buildPrompt(course, profile, excludeNames), DiscoveryResponseSchema);
   } catch (error) {
     await logError(supabase, "universities/discover", error instanceof Error ? error.message : String(error));
     const message =

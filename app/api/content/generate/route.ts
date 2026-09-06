@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
-import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
 import { fetchRedditSignals } from "@/lib/integrations/reddit";
 import { fetchYouTubeSignals } from "@/lib/integrations/youtube";
 import { fetchGoogleTrendsSignals } from "@/lib/integrations/google-trends";
@@ -161,9 +161,8 @@ export async function POST(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const isAdmin = await checkIsAdmin(supabase, user);
-  let apiKey: string;
   try {
-    apiKey = await resolveGeminiApiKey(user.id, isAdmin);
+    await resolveGeminiApiKey(user.id, isAdmin); // fails fast if no key is configured, before any other work
     await checkAndIncrementUsage(supabase, user.id, "content_generate", isAdmin, IDEA_COUNT);
   } catch (error) {
     if (error instanceof NoApiKeyError || error instanceof UsageLimitExceededError) {
@@ -226,7 +225,7 @@ export async function POST(request: NextRequest) {
 
   let ideas: z.infer<typeof ContentIdeasResponseSchema>;
   try {
-    ideas = await generateContent(apiKey, buildPrompt(signals, tripSummaries, recentTitles, context), ContentIdeasResponseSchema);
+    ideas = await generateContentAsUser(user.id, isAdmin, buildPrompt(signals, tripSummaries, recentTitles, context), ContentIdeasResponseSchema);
   } catch (error) {
     await logError(supabase, "content/generate", error instanceof Error ? error.message : String(error));
     const message =
