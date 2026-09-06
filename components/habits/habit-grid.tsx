@@ -92,9 +92,20 @@ export function HabitGrid() {
       toast.error(error);
       return;
     }
+    const { excused, skipped } = (await res.json()) as {
+      excused: { habit_id: string; habit_name: string }[];
+      skipped: { habit_id: string; habit_name: string; used: number; cap: number }[];
+    };
     setLeaveOpen(false);
     mutateLogs();
-    toast.success("Marked as leave — those days won't break your streaks.");
+    if (skipped.length === 0) {
+      toast.success("Marked as leave — those days won't break your streaks.");
+    } else {
+      toast.warning(
+        `Marked leave for ${excused.length} habit${excused.length === 1 ? "" : "s"}. ` +
+          skipped.map((s) => `${s.habit_name} has no leave marks left this month (${s.used}/${s.cap} used)`).join("; ")
+      );
+    }
   }
 
   async function toggleCell(habitId: string, date: string, current: CellState | undefined) {

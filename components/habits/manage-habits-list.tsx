@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import useSWR from "swr";
 import { toast } from "sonner";
+import { fetcher } from "@/lib/swr-fetcher";
 import {
   DndContext,
   closestCenter,
@@ -36,11 +38,15 @@ function SortableHabitRow({
   onRename,
   onArchive,
   onUpdate,
+  leaveUsed,
+  leaveCap,
 }: {
   habit: Habit;
   onRename: (id: string, name: string) => void;
   onArchive: (id: string) => void;
   onUpdate: (id: string, updates: ReminderUpdate) => void;
+  leaveUsed: number;
+  leaveCap: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: habit.id });
@@ -102,6 +108,10 @@ function SortableHabitRow({
         <ColorPicker value={habit.color} onChange={(color) => onUpdate(habit.id, { color })} />
       </div>
 
+      <p className="pl-6 text-[11px] text-text-muted">
+        {leaveUsed}/{leaveCap} leave marks used this month
+      </p>
+
       <div className="flex flex-wrap items-center gap-2 pl-6">
         <BellRing className="size-3.5 text-text-muted" />
         <Input
@@ -148,6 +158,13 @@ export function ManageHabitsList() {
   const [newFrequency, setNewFrequency] = useState<number[]>(ALL_WEEKDAYS);
   const [newColor, setNewColor] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const { data: leaveData } = useSWR<{ cap: number; usage: { habit_id: string; count: number }[] }>(
+    "/api/habits/leave",
+    fetcher
+  );
+  const leaveCap = leaveData?.cap ?? 4;
+  const leaveUsedByHabit = new Map((leaveData?.usage ?? []).map((u) => [u.habit_id, u.count]));
 
   useEffect(() => {
     fetch("/api/habits")
@@ -275,6 +292,8 @@ export function ManageHabitsList() {
                 onRename={renameHabit}
                 onArchive={archiveHabit}
                 onUpdate={updateHabit}
+                leaveUsed={leaveUsedByHabit.get(habit.id) ?? 0}
+                leaveCap={leaveCap}
               />
             ))}
           </div>
