@@ -1,0 +1,11 @@
+-- 20260902000000_data_isolation.sql narrowed error_logs to an admin-only
+-- SELECT policy but never added an INSERT policy, so every regular API
+-- route's logError() call (using the request-scoped RLS client, not the
+-- service-role client cron routes use) has been silently failing ever
+-- since — logError()'s insert is wrapped in a best-effort try/catch, so
+-- nothing surfaced this until an AI route's actual failure couldn't be
+-- found in the table at all. error_logs has no user_id column (it's
+-- shared diagnostic data, not personal data), so any authenticated
+-- session may insert into it — restores the original pre-data-isolation
+-- behavior for inserts specifically, while keeping reads admin-only.
+create policy "authenticated insert" on error_logs for insert to authenticated with check (true);
