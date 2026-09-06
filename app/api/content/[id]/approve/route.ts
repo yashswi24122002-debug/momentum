@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
-import { generateContent, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 
 const ReportSchema = z.object({
@@ -55,9 +55,8 @@ export async function POST(
   if (unauthorized) return unauthorized;
 
   const isAdmin = await checkIsAdmin(supabase, user);
-  let apiKey: string;
   try {
-    apiKey = await resolveGeminiApiKey(user.id, isAdmin);
+    await resolveGeminiApiKey(user.id, isAdmin); // fails fast if no key is configured, before any other work
   } catch (error) {
     if (error instanceof NoApiKeyError) return NextResponse.json({ error: error.message }, { status: 403 });
     throw error;
@@ -84,7 +83,7 @@ export async function POST(
 
   let report: z.infer<typeof ReportSchema>;
   try {
-    report = await generateContent(apiKey, buildPrompt(idea, matchedMedia ?? []), ReportSchema);
+    report = await generateContentAsUser(user.id, isAdmin, buildPrompt(idea, matchedMedia ?? []), ReportSchema);
   } catch (error) {
     await logError(supabase, "content/approve", error instanceof Error ? error.message : String(error), { ideaId: id });
     const message =
