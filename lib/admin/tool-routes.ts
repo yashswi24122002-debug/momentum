@@ -6,7 +6,7 @@ import type { ToolKey } from "@/lib/types/admin";
 // member doesn't have gets rejected here regardless of which specific
 // route it hits.
 export const TOOL_ROUTE_PREFIXES: Record<ToolKey, string[]> = {
-  habits: ["/habits", "/api/habits", "/api/weekly-todos"],
+  habits: ["/habits", "/api/habits", "/api/weekly-todos", "/api/daily-todos"],
   ideas: ["/ideas", "/api/ideas", "/api/idea-reports"],
   content: ["/content", "/api/content", "/api/content-reports", "/api/media", "/api/trips"],
   masters_abroad: ["/masters-abroad", "/api/universities", "/api/tasks", "/api/documents"],

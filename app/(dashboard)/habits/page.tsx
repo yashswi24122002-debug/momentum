@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DailyChecklist } from "@/components/habits/daily-checklist";
 import { WeeklyTodoCard } from "@/components/habits/weekly-todo-card";
+import { DailyTasksCard } from "@/components/habits/daily-tasks-card";
 
 export default function HabitsPage() {
   return (
@@ -21,7 +22,10 @@ export default function HabitsPage() {
 
       <div className="grid gap-6 md:grid-cols-[1fr_320px]">
         <DailyChecklist />
-        <WeeklyTodoCard />
+        <div className="space-y-6">
+          <DailyTasksCard />
+          <WeeklyTodoCard />
+        </div>
       </div>
     </div>
   );
