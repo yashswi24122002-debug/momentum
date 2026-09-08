@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { Plus, Trash2, Pencil, GripVertical, ChevronLeft, ChevronRight, Flame, Plane, X } from "lucide-react";
 import { toast } from "sonner";
@@ -159,8 +160,12 @@ function MacroBar({ label, value, goal }: { label: string; value: number; goal?:
   );
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export function CaloriesDashboard() {
-  const [date, setDate] = useState(todayLocalISODate());
+  const searchParams = useSearchParams();
+  const dateParam = searchParams.get("date");
+  const [date, setDate] = useState(() => (dateParam && ISO_DATE.test(dateParam) ? dateParam : todayLocalISODate()));
   const { data, mutate } = useSWR<DashboardData>(`/api/calories/dashboard?date=${date}`, fetcher);
   const [editTarget, setEditTarget] = useState<{ logId: string; item: FoodLogItem } | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
@@ -391,14 +396,25 @@ export function CaloriesDashboard() {
     );
   }
 
+  const isToday = date === todayLocalISODate();
+  const isYesterday = date === addDays(todayLocalISODate(), -1);
+
   return (
     <div className="flex flex-1 flex-col gap-6 pb-16">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-text-primary">Calories</h1>
-        <Button size="sm" render={<Link href="/calories/log" />} nativeButton={false}>
-          <Plus className="size-3.5" />
-          Add Food
-        </Button>
+        {isToday && (
+          <Button size="sm" render={<Link href={`/calories/log?date=${date}`} />} nativeButton={false}>
+            <Plus className="size-3.5" />
+            Add Food
+          </Button>
+        )}
+        {isYesterday && (
+          <Button size="sm" variant="outline" render={<Link href={`/calories/log?date=${date}`} />} nativeButton={false}>
+            <Pencil className="size-3.5" />
+            Edit previous day
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center justify-center gap-3">
@@ -457,7 +473,17 @@ export function CaloriesDashboard() {
       )}
 
       {data.leave ? null : data.mealGroups.length === 0 ? (
-        <EmptyState icon={Flame} title="Nothing logged yet" description="Tap Add Food to log your first meal for this day." />
+        <EmptyState
+          icon={Flame}
+          title="Nothing logged"
+          description={
+            isToday
+              ? "Tap Add Food to log your first meal for this day."
+              : isYesterday
+                ? "Tap Edit previous day to log something for this day."
+                : "Nothing was logged for this day."
+          }
+        />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div className="space-y-4">

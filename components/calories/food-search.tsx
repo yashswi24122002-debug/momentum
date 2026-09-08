@@ -116,6 +116,7 @@ export function FoodSearch({ logDate, onLogged }: { logDate?: string; onLogged: 
       )}
 
       <LogPortionDialog
+        key={selected?.id ?? "none"}
         open={selected !== null}
         onOpenChange={(open) => !open && setSelected(null)}
         food={selected}

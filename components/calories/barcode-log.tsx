@@ -83,6 +83,7 @@ export function BarcodeLog({ logDate, onLogged }: { logDate?: string; onLogged: 
           Scan a different item
         </Button>
         <LogPortionDialog
+          key={food?.id ?? "none"}
           open={true}
           onOpenChange={(open) => !open && setFood(null)}
           food={food}

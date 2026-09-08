@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { scaleNutrition } from "@/lib/calories/nutrition";
 import { MEAL_TYPE_ORDER, MEAL_TYPE_LABELS } from "@/lib/calories/ui";
 import { todayLocalISODate } from "@/lib/date";
+import { fetcher } from "@/lib/swr-fetcher";
 import type { FoodWithServings, RecipeWithIngredients, MealType, FoodLogWithItems } from "@/lib/types/calories";
+
+type LastLogged = { quantity: number; serving_label: string; serving_g: number } | null;
 
 const CUSTOM_GRAMS = "__grams__";
 
@@ -35,6 +39,30 @@ export function LogPortionDialog({
   const [quantity, setQuantity] = useState("1");
   const [mealType, setMealType] = useState<MealType>("breakfast");
   const [saving, setSaving] = useState(false);
+
+  // Defaults to whatever this user last logged for this exact food (e.g.
+  // "250g" for banana shake every time) instead of the catalogue's generic
+  // serving size — only meaningful for a real food, not a recipe, and only
+  // needs to apply once per food selection (the parent remounts this
+  // dialog via `key={food.id}` on each new selection, so this naturally
+  // resets per food rather than needing to track "which food this was for").
+  const { data: lastLoggedData } = useSWR<{ last: LastLogged }>(
+    food ? `/api/calories/foods/${food.id}/last-logged` : null,
+    fetcher
+  );
+  const [appliedLastLogged, setAppliedLastLogged] = useState(false);
+  if (lastLoggedData?.last && !appliedLastLogged) {
+    setAppliedLastLogged(true);
+    const last = lastLoggedData.last;
+    setQuantity(String(last.quantity));
+    const matchedServing = servings.find((s) => s.label === last.serving_label);
+    if (matchedServing) {
+      setServingChoice(matchedServing.label);
+    } else {
+      setServingChoice(CUSTOM_GRAMS);
+      setGrams(String(last.serving_g));
+    }
+  }
 
   const servingG = servingChoice === CUSTOM_GRAMS ? Number(grams) || 0 : servings.find((s) => s.label === servingChoice)?.grams ?? 0;
   const servingLabel = servingChoice === CUSTOM_GRAMS ? "g" : servingChoice;
