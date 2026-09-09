@@ -142,7 +142,15 @@ function DraggableLogCard({
 }
 
 function MacroBar({ label, value, goal }: { label: string; value: number; goal?: number | null }) {
-  const pct = goal ? Math.min(100, (value / goal) * 100) : 0;
+  const over = !!goal && value > goal;
+  // Under/at goal: bar fills value/goal, all green, same as before. Over
+  // goal: the bar's scale extends to fit the actual value, so it's always
+  // fully filled — the green:red split is exactly goal:excess, e.g. 10%
+  // over goal draws a small red sliver, not the whole bar going green.
+  const scale = goal ? Math.max(value, goal) : 0;
+  const basePct = goal && scale > 0 ? (Math.min(value, goal) / scale) * 100 : 0;
+  const overPct = over && goal && scale > 0 ? ((value - goal) / scale) * 100 : 0;
+
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
@@ -152,8 +160,9 @@ function MacroBar({ label, value, goal }: { label: string; value: number; goal?:
         </span>
       </div>
       {goal ? (
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
-          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
+          <div className="h-full bg-primary transition-all" style={{ width: `${basePct}%` }} />
+          {over && <div className="h-full bg-danger transition-all" style={{ width: `${overPct}%` }} />}
         </div>
       ) : null}
     </div>
