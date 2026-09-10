@@ -30,7 +30,7 @@ function NavLink({
       href={href}
       onClick={onNavigate}
       className={cn(
-        "flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors",
         indent ? "ml-3.5 border-l border-border pl-4" : "px-3",
         active
           ? "text-primary" + (indent ? "" : " bg-accent-muted-bg")
@@ -69,7 +69,7 @@ function NavGroup({
         <Link
           href={item.href}
           onClick={onNavigate}
-          className="flex flex-1 items-center gap-3 px-3 py-2"
+          className="flex flex-1 items-center gap-3 px-3 py-2.5"
         >
           <item.icon className="size-4 shrink-0" strokeWidth={exactActive ? 2.5 : 2} />
           {item.label}
@@ -124,11 +124,11 @@ export function NavContent({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-14 items-center gap-2 px-5">
+      <div className="flex h-14 shrink-0 items-center gap-2 px-5">
         <Image src="/brand/logo-mark.png" alt="" width={22} height={22} className="shrink-0" priority />
         <span className="text-sm font-semibold tracking-tight text-text-primary">Momentum</span>
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-2">
         {items.map((item) =>
           item.children ? (
             <NavGroup key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
@@ -144,7 +144,7 @@ export function NavContent({
           )
         )}
       </nav>
-      <div className="border-t border-border p-3">
+      <div className="shrink-0 border-t border-border p-3">
         <LogoutButton />
       </div>
     </div>
