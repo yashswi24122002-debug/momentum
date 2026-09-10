@@ -454,21 +454,23 @@ export function CaloriesDashboard() {
         </Card>
       ) : (
         <>
-          <div className="flex justify-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-text-muted"
-              onClick={() => {
-                setLeaveFrom(date);
-                setLeaveTo(date);
-                setLeaveOpen(true);
-              }}
-            >
-              <Plane className="size-3.5" />
-              Mark leave
-            </Button>
-          </div>
+          {isToday && (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-text-muted"
+                onClick={() => {
+                  setLeaveFrom(date);
+                  setLeaveTo(date);
+                  setLeaveOpen(true);
+                }}
+              >
+                <Plane className="size-3.5" />
+                Mark leave
+              </Button>
+            </div>
+          )}
 
           <Card className="items-center gap-4 border-border bg-surface p-5">
             <CalorieRing consumed={data.consumed.kcal} goal={data.settings.daily_calorie_goal} />
