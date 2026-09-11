@@ -12,46 +12,75 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetcher } from "@/lib/swr-fetcher";
 import { todayLocalISODate } from "@/lib/date";
 
-type Task = { text: string; done: boolean };
-type DailyTodoResponse = { daily_todo: { tasks: Task[] } | null };
+type Task = { id: string; text: string; done: boolean; done_on: string | null };
+type TasksResponse = { tasks: Task[] };
 
-// Ad-hoc, same-day-only tasks — deliberately separate from tracked habits:
-// no streaks, no grid/dashboard presence, no history. Tomorrow the server
-// won't return today's rows at all (app/api/daily-todos/route.ts deletes
-// anything before "today" on every read), so there's nothing to carry over.
+// Ad-hoc, separate from tracked habits: no streaks, no grid/dashboard
+// presence. A pending task has no date tied to it, so it keeps showing up
+// every day until it's checked off or removed — only a *done* task is
+// day-scoped (visible the day it was completed, gone the next day;
+// app/api/daily-todos/route.ts drops anything done before today on every
+// read, so nothing done is ever kept as history).
 export function DailyTasksCard() {
   const [date] = useState(() => todayLocalISODate());
-  const { data, mutate } = useSWR<DailyTodoResponse>(`/api/daily-todos?date=${date}`, fetcher);
+  const { data, mutate } = useSWR<TasksResponse>(`/api/daily-todos?date=${date}`, fetcher);
   const [newText, setNewText] = useState("");
 
-  const tasks = data?.daily_todo?.tasks ?? [];
+  const tasks = data?.tasks ?? [];
 
-  async function save(next: Task[]) {
-    mutate({ daily_todo: { tasks: next } }, { revalidate: false });
+  async function addTask(e: FormEvent) {
+    e.preventDefault();
+    const text = newText.trim();
+    if (!text) return;
+    setNewText("");
+
     const res = await fetch("/api/daily-todos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) {
+      toast.error("Couldn't add that — try again.");
+      return;
+    }
+    const { task } = (await res.json()) as { task: Task };
+    mutate((prev) => (prev ? { tasks: [...prev.tasks, task] } : prev), { revalidate: false });
+  }
+
+  async function toggleTask(task: Task) {
+    const nextDone = !task.done;
+    const previous = tasks;
+    mutate(
+      {
+        tasks: nextDone
+          ? tasks.map((t) => (t.id === task.id ? { ...t, done: true, done_on: date } : t))
+          : // Un-checking a task that was done on an earlier day (still
+            // visible today only because it was just toggled from the
+            // list) needs to stay in view rather than vanish immediately.
+            tasks.map((t) => (t.id === task.id ? { ...t, done: false, done_on: null } : t)),
+      },
+      { revalidate: false }
+    );
+
+    const res = await fetch(`/api/daily-todos/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, tasks: next }),
+      body: JSON.stringify({ done: nextDone, date }),
     });
     if (!res.ok) {
       toast.error("Couldn't save that — try again.");
-      mutate();
+      mutate({ tasks: previous }, { revalidate: false });
     }
   }
 
-  function addTask(e: FormEvent) {
-    e.preventDefault();
-    if (!newText.trim()) return;
-    save([...tasks, { text: newText.trim(), done: false }]);
-    setNewText("");
-  }
-
-  function toggleTask(index: number) {
-    save(tasks.map((t, i) => (i === index ? { ...t, done: !t.done } : t)));
-  }
-
-  function removeTask(index: number) {
-    save(tasks.filter((_, i) => i !== index));
+  async function removeTask(id: string) {
+    const previous = tasks;
+    mutate({ tasks: tasks.filter((t) => t.id !== id) }, { revalidate: false });
+    const res = await fetch(`/api/daily-todos/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error("Couldn't remove that — try again.");
+      mutate({ tasks: previous }, { revalidate: false });
+    }
   }
 
   if (data === undefined) {
@@ -68,7 +97,7 @@ export function DailyTasksCard() {
           <Input
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
-            placeholder="Add a one-off task for today"
+            placeholder="Add a one-off task"
           />
           <Button type="submit" size="icon" variant="outline">
             <Plus className="size-4" />
@@ -76,12 +105,12 @@ export function DailyTasksCard() {
         </form>
 
         {tasks.length === 0 ? (
-          <p className="text-xs text-text-muted">Nothing added yet — these clear automatically at the end of the day.</p>
+          <p className="text-xs text-text-muted">Nothing here — a task stays until you check it off.</p>
         ) : (
           <div className="space-y-2">
-            {tasks.map((task, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Checkbox checked={task.done} onCheckedChange={() => toggleTask(i)} />
+            {tasks.map((task) => (
+              <div key={task.id} className="flex items-center gap-2">
+                <Checkbox checked={task.done} onCheckedChange={() => toggleTask(task)} />
                 <span className={task.done ? "flex-1 text-sm text-text-muted line-through" : "flex-1 text-sm text-text-primary"}>
                   {task.text}
                 </span>
@@ -89,7 +118,7 @@ export function DailyTasksCard() {
                   variant="ghost"
                   size="icon-xs"
                   className="shrink-0 text-text-muted hover:text-danger"
-                  onClick={() => removeTask(i)}
+                  onClick={() => removeTask(task.id)}
                   aria-label="Remove task"
                 >
                   <X className="size-3.5" />
