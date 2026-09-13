@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import useSWR from "swr";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -14,82 +14,91 @@ import { startOfWeekMonday } from "@/lib/date";
 import type { WeeklyTodoTask } from "@/lib/types/habits";
 
 type WeeklyTodoResponse = {
-  weekly_todo: { top_priority: string | null; top_3_tasks: WeeklyTodoTask[] } | null;
+  weekly_todo: { top_priority: string | null } | null;
+  tasks: WeeklyTodoTask[];
 };
-
-const MIN_TASK_SLOTS = 3;
-
-function withMinSlots(tasks: WeeklyTodoTask[]): WeeklyTodoTask[] {
-  if (tasks.length >= MIN_TASK_SLOTS) return tasks;
-  return [...tasks, ...Array.from({ length: MIN_TASK_SLOTS - tasks.length }, () => ({ text: "", done: false }))];
-}
 
 export function WeeklyTodoCard() {
   const [weekStart] = useState(() => startOfWeekMonday(new Date()));
-  const { data } = useSWR<WeeklyTodoResponse>(`/api/weekly-todos?week_start=${weekStart}`, fetcher);
+  const { data, mutate } = useSWR<WeeklyTodoResponse>(`/api/weekly-todos?week_start=${weekStart}`, fetcher);
 
   const [priority, setPriority] = useState("");
-  const [tasks, setTasks] = useState<WeeklyTodoTask[]>(withMinSlots([]));
-  // The fetched data is only used to seed these editable fields once —
-  // after that, local state (edited via onChange/onBlur below) is the
-  // source of truth, so a background revalidation doesn't clobber
-  // in-progress edits.
+  const [newText, setNewText] = useState("");
+  // The fetched top_priority is only used to seed this editable field once
+  // — after that, local state (edited via onChange/onBlur below) is the
+  // source of truth, so a background revalidation doesn't clobber an
+  // in-progress edit. Tasks don't need this: they're never edited in
+  // place, only added/toggled/removed, so the SWR cache can stay the
+  // source of truth for them directly.
   const [hydrated, setHydrated] = useState(false);
-
-  // Adjust state during render (React's documented escape hatch for
-  // seeding state from an async value) instead of an effect, so this
-  // only ever fires once per mount, right before the seeded render paints.
   if (!hydrated && data !== undefined) {
     setHydrated(true);
-    if (data.weekly_todo) {
-      setPriority(data.weekly_todo.top_priority ?? "");
-      setTasks(withMinSlots(data.weekly_todo.top_3_tasks ?? []));
-    }
+    setPriority(data.weekly_todo?.top_priority ?? "");
   }
 
-  async function save(next: { top_priority?: string; top_3_tasks?: WeeklyTodoTask[] }) {
+  const tasks = data?.tasks ?? [];
+
+  async function savePriority() {
     const res = await fetch("/api/weekly-todos", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ week_start: weekStart, ...next }),
+      body: JSON.stringify({ week_start: weekStart, top_priority: priority }),
     });
     if (!res.ok) toast.error("Couldn't save that — try again.");
   }
 
-  // Trims trailing blank slots (beyond the minimum) before persisting, so
-  // the stored list doesn't accumulate empty rows forever.
-  function trimmed(list: WeeklyTodoTask[]): WeeklyTodoTask[] {
-    let end = list.length;
-    while (end > MIN_TASK_SLOTS && !list[end - 1].text.trim() && !list[end - 1].done) end--;
-    return list.slice(0, end);
-  }
+  async function addTask(e: FormEvent) {
+    e.preventDefault();
+    const text = newText.trim();
+    if (!text) return;
+    setNewText("");
 
-  function updateTaskText(index: number, text: string) {
-    setTasks((prev) => prev.map((t, i) => (i === index ? { ...t, text } : t)));
-  }
-
-  function commitTasks(next: WeeklyTodoTask[]) {
-    save({ top_3_tasks: trimmed(next) });
-  }
-
-  function toggleTaskDone(index: number) {
-    setTasks((prev) => {
-      const next = prev.map((t, i) => (i === index ? { ...t, done: !t.done } : t));
-      commitTasks(next);
-      return next;
+    const res = await fetch("/api/weekly-todos/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
     });
+    if (!res.ok) {
+      toast.error("Couldn't add that — try again.");
+      return;
+    }
+    const { task } = (await res.json()) as { task: WeeklyTodoTask };
+    mutate((prev) => (prev ? { ...prev, tasks: [...prev.tasks, task] } : prev), { revalidate: false });
   }
 
-  function addTask() {
-    setTasks((prev) => [...prev, { text: "", done: false }]);
-  }
+  async function toggleTask(task: WeeklyTodoTask) {
+    const nextDone = !task.done;
+    const previous = tasks;
+    mutate(
+      (prev) =>
+        prev && {
+          ...prev,
+          tasks: prev.tasks.map((t) =>
+            t.id === task.id ? { ...t, done: nextDone, done_on_week: nextDone ? weekStart : null } : t
+          ),
+        },
+      { revalidate: false }
+    );
 
-  function removeTask(index: number) {
-    setTasks((prev) => {
-      const next = withMinSlots(prev.filter((_, i) => i !== index));
-      commitTasks(next);
-      return next;
+    const res = await fetch(`/api/weekly-todos/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: nextDone, week_start: weekStart }),
     });
+    if (!res.ok) {
+      toast.error("Couldn't save that — try again.");
+      mutate((prev) => prev && { ...prev, tasks: previous }, { revalidate: false });
+    }
+  }
+
+  async function removeTask(id: string) {
+    const previous = tasks;
+    mutate((prev) => prev && { ...prev, tasks: prev.tasks.filter((t) => t.id !== id) }, { revalidate: false });
+    const res = await fetch(`/api/weekly-todos/tasks/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error("Couldn't remove that — try again.");
+      mutate((prev) => prev && { ...prev, tasks: previous }, { revalidate: false });
+    }
   }
 
   if (data === undefined) {
@@ -108,39 +117,38 @@ export function WeeklyTodoCard() {
             value={priority}
             placeholder="What matters most this week?"
             onChange={(e) => setPriority(e.target.value)}
-            onBlur={() => save({ top_priority: priority })}
+            onBlur={savePriority}
           />
         </div>
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-text-muted">Priority tasks</label>
-            <Button variant="ghost" size="icon-xs" onClick={addTask} aria-label="Add task">
+          <label className="text-xs font-medium text-text-muted">Priority tasks</label>
+          <form onSubmit={addTask} className="flex gap-2">
+            <Input value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Add a priority task" />
+            <Button type="submit" size="icon-sm" variant="outline">
               <Plus className="size-3.5" />
             </Button>
-          </div>
-          {tasks.map((task, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Checkbox checked={task.done} onCheckedChange={() => toggleTaskDone(i)} />
-              <Input
-                value={task.text}
-                placeholder={`Task ${i + 1}`}
-                className={task.done ? "text-text-muted line-through" : undefined}
-                onChange={(e) => updateTaskText(i, e.target.value)}
-                onBlur={() => commitTasks(tasks)}
-              />
-              {tasks.length > MIN_TASK_SLOTS && (
+          </form>
+          {tasks.length === 0 ? (
+            <p className="text-xs text-text-muted">Nothing here yet — a task stays until you check it off, even into next week.</p>
+          ) : (
+            tasks.map((task) => (
+              <div key={task.id} className="flex items-center gap-2">
+                <Checkbox checked={task.done} onCheckedChange={() => toggleTask(task)} />
+                <span className={task.done ? "flex-1 text-sm text-text-muted line-through" : "flex-1 text-sm text-text-primary"}>
+                  {task.text}
+                </span>
                 <Button
                   variant="ghost"
                   size="icon-xs"
                   className="shrink-0 text-text-muted hover:text-danger"
-                  onClick={() => removeTask(i)}
+                  onClick={() => removeTask(task.id)}
                   aria-label="Remove task"
                 >
                   <X className="size-3.5" />
                 </Button>
-              )}
-            </div>
-          ))}
+              </div>
+            ))
+          )}
         </div>
       </CardContent>
     </Card>

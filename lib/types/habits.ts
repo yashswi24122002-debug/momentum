@@ -28,14 +28,16 @@ export type HabitLog = {
   note: string | null;
 };
 
+/** A pending task carries no week — it keeps showing up until done or deleted. done_on_week is set only once completed. */
 export type WeeklyTodoTask = {
+  id: string;
   text: string;
   done: boolean;
+  done_on_week: string | null;
 };
 
 export type WeeklyTodo = {
   id: string;
   week_start_date: string;
   top_priority: string | null;
-  top_3_tasks: WeeklyTodoTask[];
 };

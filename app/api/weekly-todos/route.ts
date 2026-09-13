@@ -14,24 +14,33 @@ function resolveWeekStart(candidate: string | null): string {
   return startOfWeekMonday(new Date());
 }
 
+// Priority tasks live in weekly_tasks (see 20260908000008), not this row —
+// a pending one has no week attached and keeps showing every week until
+// done, so it's fetched separately from whichever week's row this is.
 export async function GET(request: NextRequest) {
   const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const weekStart = resolveWeekStart(new URL(request.url).searchParams.get("week_start"));
 
-  const { data, error } = await supabase
-    .from("weekly_todos")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("week_start_date", weekStart)
-    .maybeSingle();
+  const [{ data: weeklyTodo, error: weeklyTodoError }, { data: tasks, error: tasksError }] = await Promise.all([
+    supabase.from("weekly_todos").select("*").eq("user_id", user.id).eq("week_start_date", weekStart).maybeSingle(),
+    supabase
+      .from("weekly_tasks")
+      .select("*")
+      .eq("user_id", user.id)
+      .or(`done.eq.false,done_on_week.eq.${weekStart}`)
+      .order("created_at", { ascending: true }),
+  ]);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (weeklyTodoError) {
+    return NextResponse.json({ error: weeklyTodoError.message }, { status: 500 });
+  }
+  if (tasksError) {
+    return NextResponse.json({ error: tasksError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ weekly_todo: data });
+  return NextResponse.json({ weekly_todo: weeklyTodo, tasks });
 }
 
 export async function POST(request: NextRequest) {
@@ -39,11 +48,7 @@ export async function POST(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
-  const { top_priority, top_3_tasks, week_start } = body as {
-    top_priority?: string;
-    top_3_tasks?: { text: string; done: boolean }[];
-    week_start?: string;
-  };
+  const { top_priority, week_start } = body as { top_priority?: string; week_start?: string };
   const weekStart = resolveWeekStart(week_start ?? null);
 
   const { data, error } = await supabase
@@ -53,7 +58,6 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         week_start_date: weekStart,
         ...(top_priority !== undefined && { top_priority }),
-        ...(top_3_tasks !== undefined && { top_3_tasks }),
       },
       { onConflict: "user_id,week_start_date" }
     )
@@ -75,19 +79,15 @@ export async function PATCH(request: NextRequest) {
   const weekStart = resolveWeekStart(
     typeof body.week_start === "string" ? body.week_start : null
   );
-  const updates: Record<string, unknown> = {};
 
-  if (typeof body.top_priority === "string") updates.top_priority = body.top_priority;
-  if (Array.isArray(body.top_3_tasks)) updates.top_3_tasks = body.top_3_tasks;
-
-  if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+  if (typeof body.top_priority !== "string") {
+    return NextResponse.json({ error: "top_priority (string) is required" }, { status: 400 });
   }
 
   const { data, error } = await supabase
     .from("weekly_todos")
     .upsert(
-      { user_id: user.id, week_start_date: weekStart, ...updates },
+      { user_id: user.id, week_start_date: weekStart, top_priority: body.top_priority },
       { onConflict: "user_id,week_start_date" }
     )
     .select()
