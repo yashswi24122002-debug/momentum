@@ -24,7 +24,8 @@ export type FeatureKey =
   | "masters_discover"
   | "calories_analyse_photo"
   | "calories_fetch_details"
-  | "jobs_draft_outreach";
+  | "jobs_draft_outreach"
+  | "jobs_tailor_application";
 
 export type UsageLimit = {
   id: string;

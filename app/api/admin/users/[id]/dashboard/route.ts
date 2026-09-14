@@ -24,7 +24,7 @@ export async function GET(
   const { data: toolAccess } = await supabase.from("tool_access").select("tool_key, enabled").eq("user_id", id);
   const enabledTools = new Set((toolAccess ?? []).filter((t) => t.enabled).map((t) => t.tool_key));
 
-  const [habits, ideas, contentIdeas, universities, tasks, outreach, foodLogs, calorieSettings] = await Promise.all([
+  const [habits, ideas, contentIdeas, universities, tasks, jobApplications, foodLogs, calorieSettings] = await Promise.all([
     enabledTools.has("habits")
       ? supabase.from("habits").select("*").eq("user_id", id).order("sort_order")
       : { data: [] },
@@ -42,8 +42,8 @@ export async function GET(
       : { data: [] },
     enabledTools.has("jobs")
       ? supabase
-          .from("outreach")
-          .select("id, status, sent_at, created_at, job_postings(company, role_title)")
+          .from("job_applications")
+          .select("id, company, role_title, status, sent_at, created_at")
           .eq("user_id", id)
           .order("created_at", { ascending: false })
       : { data: [] },
@@ -77,7 +77,7 @@ export async function GET(
     content: contentIdeas.data ?? [],
     universities: universities.data ?? [],
     tasks: tasks.data ?? [],
-    outreach: outreach.data ?? [],
+    jobApplications: jobApplications.data ?? [],
     calories: {
       totalLogs: foodLogs.data?.length ?? 0,
       distinctDays: new Set((foodLogs.data ?? []).map((f) => f.logged_on)).size,

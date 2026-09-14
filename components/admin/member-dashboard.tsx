@@ -17,12 +17,13 @@ import type { University, Task } from "@/lib/types/masters-abroad";
 import type { Profile, ToolKey } from "@/lib/types/admin";
 import { LayoutGrid } from "lucide-react";
 
-type OutreachRow = {
+type JobApplicationRow = {
   id: string;
+  company: string;
+  role_title: string;
   status: string;
   sent_at: string | null;
   created_at: string;
-  job_postings: { company: string; role_title: string } | null;
 };
 
 type MemberData = {
@@ -33,7 +34,7 @@ type MemberData = {
   content: ContentIdea[];
   universities: University[];
   tasks: Task[];
-  outreach: OutreachRow[];
+  jobApplications: JobApplicationRow[];
   calories: { totalLogs: number; distinctDays: number; dailyGoal: number | null };
 };
 
@@ -207,14 +208,14 @@ export function MemberDashboardContent({ userId }: { userId: string }) {
         {enabled.has("jobs") && (
           <Card className="border-border bg-surface">
             <CardHeader>
-              <CardTitle className="text-sm text-text-secondary">Job outreach ({data.outreach.length})</CardTitle>
+              <CardTitle className="text-sm text-text-secondary">Job applications ({data.jobApplications.length})</CardTitle>
             </CardHeader>
             <CardContent>
               <GroupedList
-                emptyLabel="No outreach drafted yet."
-                items={data.outreach}
-                renderTitle={(o) => (o.job_postings ? `${o.job_postings.role_title} @ ${o.job_postings.company}` : "Unknown posting")}
-                renderMeta={(o) => (o.sent_at ? `Sent ${o.sent_at.slice(0, 10)}` : `Created ${o.created_at.slice(0, 10)}`)}
+                emptyLabel="No applications started yet."
+                items={data.jobApplications}
+                renderTitle={(a) => `${a.role_title} @ ${a.company}`}
+                renderMeta={(a) => (a.sent_at ? `Sent ${a.sent_at.slice(0, 10)}` : `Created ${a.created_at.slice(0, 10)}`)}
               />
             </CardContent>
           </Card>

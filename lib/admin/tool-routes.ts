@@ -10,7 +10,7 @@ export const TOOL_ROUTE_PREFIXES: Record<ToolKey, string[]> = {
   ideas: ["/ideas", "/api/ideas", "/api/idea-reports"],
   content: ["/content", "/api/content", "/api/content-reports", "/api/media", "/api/trips"],
   masters_abroad: ["/masters-abroad", "/api/universities", "/api/tasks", "/api/documents"],
-  jobs: ["/jobs", "/api/jobs", "/api/outreach", "/api/applications", "/api/resumes"],
+  jobs: ["/jobs", "/api/job-applications", "/api/resume-profile"],
   calories: ["/calories", "/api/calories"],
 };
 

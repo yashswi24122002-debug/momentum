@@ -11,7 +11,6 @@ import {
   Images,
   FileText,
   Landmark,
-  Send,
   Flame,
   ScanBarcode,
   Soup,
@@ -91,10 +90,8 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Briefcase,
     toolKey: "jobs",
     children: [
-      { label: "Feed", href: "/jobs", icon: Briefcase },
-      { label: "Outreach Queue", href: "/jobs/outreach-queue", icon: Send },
-      { label: "Pipeline", href: "/jobs/pipeline", icon: ListChecks },
-      { label: "Resumes", href: "/jobs/resumes", icon: FileText },
+      { label: "Applications", href: "/jobs", icon: Briefcase },
+      { label: "My Resume", href: "/jobs/resume", icon: FileText },
     ],
   },
   {

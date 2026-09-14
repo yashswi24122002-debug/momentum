@@ -1,5 +1,5 @@
-import { JobFeed } from "@/components/jobs/job-feed";
+import { ApplicationList } from "@/components/jobs/application-list";
 
 export default function Page() {
-  return <JobFeed />;
+  return <ApplicationList />;
 }

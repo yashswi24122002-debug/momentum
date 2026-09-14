@@ -16,6 +16,7 @@ export const FEATURE_ORDER: FeatureKey[] = [
   "masters_discover",
   "calories_analyse_photo",
   "calories_fetch_details",
+  "jobs_tailor_application",
   "jobs_draft_outreach",
 ];
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
@@ -24,5 +25,6 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   masters_discover: "Discover universities",
   calories_analyse_photo: "Analyse meal photos",
   calories_fetch_details: "Fetch food nutrition details",
+  jobs_tailor_application: "Tailor resume + cover letter",
   jobs_draft_outreach: "Draft outreach emails",
 };
