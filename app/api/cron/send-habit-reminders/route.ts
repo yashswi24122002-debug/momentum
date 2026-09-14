@@ -62,16 +62,17 @@ export async function GET(request: NextRequest) {
 
     checked++;
 
-    let shouldSend = habit.reminder_style === "checkin";
-    if (habit.reminder_style === "nudge") {
-      const { data: log } = await supabase
-        .from("habit_logs")
-        .select("completed")
-        .eq("habit_id", habit.id)
-        .eq("date", date)
-        .maybeSingle();
-      shouldSend = !log?.completed;
-    }
+    // A day already marked excused (leave/vacation) gets no reminder at
+    // all, regardless of style — there's nothing to check in on or nudge
+    // about on a day that isn't expected to happen.
+    const { data: log } = await supabase
+      .from("habit_logs")
+      .select("completed, excused")
+      .eq("habit_id", habit.id)
+      .eq("date", date)
+      .maybeSingle();
+
+    const shouldSend = log?.excused ? false : habit.reminder_style === "checkin" ? true : !log?.completed;
 
     if (shouldSend) {
       const { data: subs } = await supabase

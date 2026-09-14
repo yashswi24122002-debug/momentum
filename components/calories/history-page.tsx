@@ -14,6 +14,7 @@ import {
   Tooltip,
   Legend,
   CartesianGrid,
+  ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,14 @@ export function HistoryPage() {
     );
   }
 
-  const chartData = data.days.map((d) => ({ ...d, label: d.date.slice(5) }));
+  // "Trackable" mirrors the adherence stats below: a leave day, or a day
+  // nothing was logged at all yet, isn't a real data point — nulled out so
+  // the line chart bridges over it (connectNulls) instead of either
+  // breaking or drawing a misleading dip to zero/way-under-goal.
+  const chartData = data.days.map((d) => {
+    const trackableDay = !d.leave && d.kcal !== null && d.kcal > 0 && d.goal !== null;
+    return { ...d, label: d.date.slice(5), delta: trackableDay ? d.kcal! - d.goal! : null };
+  });
 
   // Trackable = actually logged something that day (leave days are excused
   // entirely; a day with 0 kcal and not on leave just means nothing was
@@ -184,12 +192,25 @@ export function HistoryPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#232b29" />
               <XAxis dataKey="label" tick={AXIS_TICK} />
               <YAxis tick={AXIS_TICK} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "#e5e9e7" }} labelStyle={{ color: "#e5e9e7" }} />
-              <Legend wrapperStyle={LEGEND_STYLE} />
-              <Line type="stepAfter" dataKey="goal" name="Goal" stroke={CHART_COLORS.goal} strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />
-              <Line type="monotone" dataKey="kcal" name="Consumed" stroke={CHART_COLORS.kcal} strokeWidth={2} dot={false} connectNulls={false} />
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                itemStyle={{ color: "#e5e9e7" }}
+                labelStyle={{ color: "#e5e9e7" }}
+                formatter={(value, _name, props) => {
+                  const point = props.payload as DayPoint;
+                  if (point.leave) return ["On leave", "vs goal"];
+                  if (typeof value !== "number") return ["Nothing logged", "vs goal"];
+                  return [`${value > 0 ? "+" : ""}${value} kcal (goal ${point.goal})`, "vs goal"];
+                }}
+              />
+              <ReferenceLine y={0} stroke={CHART_COLORS.goal} strokeDasharray="4 4" label={{ value: "Goal", position: "insideTopLeft", fill: "#9ca8a4", fontSize: 10 }} />
+              <Line type="monotone" dataKey="delta" name="vs goal" stroke={CHART_COLORS.kcal} strokeWidth={2} dot={false} connectNulls />
             </LineChart>
           </ResponsiveContainer>
+          <p className="mt-1 text-[11px] text-text-muted">
+            Above the line is over goal, below is under — since your goal changes over time, this tracks the gap
+            directly instead of drawing a wobbly goal line.
+          </p>
         </CardContent>
       </Card>
 
@@ -206,11 +227,11 @@ export function HistoryPage() {
               <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "#e5e9e7" }} labelStyle={{ color: "#e5e9e7" }} />
               <Legend wrapperStyle={LEGEND_STYLE} />
               <Line type="stepAfter" dataKey="protein_goal_g" name="Protein goal" stroke={CHART_COLORS.protein} strokeWidth={1} strokeDasharray="4 4" dot={false} connectNulls legendType="none" />
-              <Line type="monotone" dataKey="protein_g" name="Protein" stroke={CHART_COLORS.protein} strokeWidth={2} dot={false} connectNulls={false} />
+              <Line type="monotone" dataKey="protein_g" name="Protein" stroke={CHART_COLORS.protein} strokeWidth={2} dot={false} connectNulls />
               <Line type="stepAfter" dataKey="carbs_goal_g" name="Carbs goal" stroke={CHART_COLORS.carbs} strokeWidth={1} strokeDasharray="4 4" dot={false} connectNulls legendType="none" />
-              <Line type="monotone" dataKey="carbs_g" name="Carbs" stroke={CHART_COLORS.carbs} strokeWidth={2} dot={false} connectNulls={false} />
+              <Line type="monotone" dataKey="carbs_g" name="Carbs" stroke={CHART_COLORS.carbs} strokeWidth={2} dot={false} connectNulls />
               <Line type="stepAfter" dataKey="fat_goal_g" name="Fat goal" stroke={CHART_COLORS.fat} strokeWidth={1} strokeDasharray="4 4" dot={false} connectNulls legendType="none" />
-              <Line type="monotone" dataKey="fat_g" name="Fat" stroke={CHART_COLORS.fat} strokeWidth={2} dot={false} connectNulls={false} />
+              <Line type="monotone" dataKey="fat_g" name="Fat" stroke={CHART_COLORS.fat} strokeWidth={2} dot={false} connectNulls />
             </LineChart>
           </ResponsiveContainer>
           <p className="mt-1 text-[11px] text-text-muted">Dashed lines are each macro&apos;s goal — solid is what you ate.</p>
