@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Check, X, Plane } from "lucide-react";
+import { Check, X, Plane, ArrowUp, ArrowDown } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -48,6 +48,9 @@ type DayPoint = {
 };
 
 const RANGE_OPTIONS = [7, 30, 90];
+// Within this many kcal of goal either direction counts as "on track" — a
+// day isn't a pass/fail against the exact number, just close enough.
+const ADHERENCE_TOLERANCE_KCAL = 250;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -99,8 +102,9 @@ export function HistoryPage() {
   // logged yet, not "hit goal", so it's excluded rather than counted as a
   // false win).
   const trackable = data.days.filter((d) => !d.leave && d.kcal !== null && d.kcal > 0 && d.goal !== null);
-  const onTrackDays = trackable.filter((d) => d.kcal! <= d.goal!);
-  const overDays = trackable.filter((d) => d.kcal! > d.goal!);
+  const onTrackDays = trackable.filter((d) => Math.abs(d.kcal! - d.goal!) <= ADHERENCE_TOLERANCE_KCAL);
+  const overDays = trackable.filter((d) => d.kcal! - d.goal! > ADHERENCE_TOLERANCE_KCAL);
+  const underDays = trackable.filter((d) => d.goal! - d.kcal! > ADHERENCE_TOLERANCE_KCAL);
   const avgKcal = trackable.length ? round(trackable.reduce((s, d) => s + d.kcal!, 0) / trackable.length) : null;
   const avgGoal = trackable.length ? round(trackable.reduce((s, d) => s + d.goal!, 0) / trackable.length) : null;
   const leaveDays = data.days.filter((d) => d.leave).length;
@@ -134,9 +138,10 @@ export function HistoryPage() {
         <CardHeader>
           <CardTitle className="text-sm text-text-secondary">Adherence</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <StatTile label="On track" value={String(onTrackDays.length)} sub={`of ${trackable.length} logged days`} />
-          <StatTile label="Over goal" value={String(overDays.length)} sub={`of ${trackable.length} logged days`} />
+        <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <StatTile label="On track" value={String(onTrackDays.length)} sub={`within ${ADHERENCE_TOLERANCE_KCAL} kcal`} />
+          <StatTile label="Over goal" value={String(overDays.length)} sub={`by more than ${ADHERENCE_TOLERANCE_KCAL}`} />
+          <StatTile label="Under goal" value={String(underDays.length)} sub={`by more than ${ADHERENCE_TOLERANCE_KCAL}`} />
           <StatTile label="Avg intake" value={avgKcal !== null ? `${avgKcal} kcal` : "—"} sub={avgGoal !== null ? `goal avg ${avgGoal}` : undefined} />
           <StatTile label="Leave days" value={String(leaveDays)} sub="excluded from stats" />
         </CardContent>
@@ -150,9 +155,12 @@ export function HistoryPage() {
           <div className="flex flex-wrap gap-1.5">
             {chartData.map((d) => {
               const isFuture = d.date > todayLocalISODate();
-              const noData = !d.leave && (d.kcal === null || d.kcal === 0) && !isFuture;
-              const over = !d.leave && d.kcal !== null && d.goal !== null && d.kcal > d.goal;
-              const onTrack = !d.leave && d.kcal !== null && d.kcal > 0 && d.goal !== null && d.kcal <= d.goal;
+              const isTrackable = !d.leave && !isFuture && d.kcal !== null && d.kcal > 0 && d.goal !== null;
+              const noData = !d.leave && !isFuture && !isTrackable;
+              const diff = isTrackable ? d.kcal! - d.goal! : 0;
+              const onTrack = isTrackable && Math.abs(diff) <= ADHERENCE_TOLERANCE_KCAL;
+              const over = isTrackable && diff > ADHERENCE_TOLERANCE_KCAL;
+              const under = isTrackable && diff < -ADHERENCE_TOLERANCE_KCAL;
               return (
                 <div
                   key={d.date}
@@ -163,7 +171,8 @@ export function HistoryPage() {
                     d.leave && "bg-surface-hover",
                     noData && "bg-background",
                     onTrack && "bg-accent-muted-bg",
-                    over && "bg-danger/10"
+                    over && "bg-danger/10",
+                    under && "bg-info/10"
                   )}
                 >
                   {d.leave ? (
@@ -171,10 +180,12 @@ export function HistoryPage() {
                   ) : onTrack ? (
                     <Check className="size-3.5 text-primary" />
                   ) : over ? (
-                    <X className="size-3.5 text-danger" />
-                  ) : (
-                    <span className="size-1 rounded-full bg-text-muted/40" />
-                  )}
+                    <ArrowUp className="size-3.5 text-danger" />
+                  ) : under ? (
+                    <ArrowDown className="size-3.5 text-info" />
+                  ) : noData ? (
+                    <X className="size-3.5 text-text-muted/50" />
+                  ) : null}
                 </div>
               );
             })}
