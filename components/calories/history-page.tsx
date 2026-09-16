@@ -48,14 +48,43 @@ type DayPoint = {
 };
 
 const RANGE_OPTIONS = [7, 30, 90];
-// Within this many kcal of goal either direction counts as "on track" — a
-// day isn't a pass/fail against the exact number, just close enough.
-const ADHERENCE_TOLERANCE_KCAL = 250;
+// Within this % of goal either direction counts as "on track" — a
+// percentage (not a flat kcal number) so it applies the same way to
+// calories and to macros, which are a completely different scale (grams,
+// not kcal). ~10% roughly matches the previous flat ±250kcal tolerance on
+// a typical ~2500-2900 kcal goal.
+const ADHERENCE_TOLERANCE_PCT = 10;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+function pctDiff(actual: number, goal: number | null): number | null {
+  if (goal === null || goal <= 0) return null;
+  return ((actual - goal) / goal) * 100;
+}
+
+/**
+ * Signed % deviation from goal for a day, combining calories with whichever
+ * macro goals are actually set — a raw calorie count alone doesn't say
+ * much if protein/carbs/fat are badly off. Calories and "macros as a
+ * group" each count for half, so 3 macro goals don't outvote the single
+ * calorie goal 3-to-1 in an unweighted average. Null for a day that isn't
+ * trackable at all (leave, nothing logged, or no goal set).
+ */
+function dayAdherencePct(d: DayPoint): number | null {
+  if (d.leave || d.kcal === null || d.kcal <= 0 || d.goal === null) return null;
+  const kcalPct = pctDiff(d.kcal, d.goal)!;
+  const macroPcts = [
+    pctDiff(d.protein_g ?? 0, d.protein_goal_g),
+    pctDiff(d.carbs_g ?? 0, d.carbs_goal_g),
+    pctDiff(d.fat_g ?? 0, d.fat_goal_g),
+  ].filter((v): v is number => v !== null);
+  if (macroPcts.length === 0) return kcalPct;
+  const avgMacroPct = macroPcts.reduce((s, v) => s + v, 0) / macroPcts.length;
+  return (kcalPct + avgMacroPct) / 2;
 }
 
 function round(n: number): number {
@@ -102,9 +131,9 @@ export function HistoryPage() {
   // logged yet, not "hit goal", so it's excluded rather than counted as a
   // false win).
   const trackable = data.days.filter((d) => !d.leave && d.kcal !== null && d.kcal > 0 && d.goal !== null);
-  const onTrackDays = trackable.filter((d) => Math.abs(d.kcal! - d.goal!) <= ADHERENCE_TOLERANCE_KCAL);
-  const overDays = trackable.filter((d) => d.kcal! - d.goal! > ADHERENCE_TOLERANCE_KCAL);
-  const underDays = trackable.filter((d) => d.goal! - d.kcal! > ADHERENCE_TOLERANCE_KCAL);
+  const onTrackDays = trackable.filter((d) => Math.abs(dayAdherencePct(d)!) <= ADHERENCE_TOLERANCE_PCT);
+  const overDays = trackable.filter((d) => dayAdherencePct(d)! > ADHERENCE_TOLERANCE_PCT);
+  const underDays = trackable.filter((d) => dayAdherencePct(d)! < -ADHERENCE_TOLERANCE_PCT);
   const avgKcal = trackable.length ? round(trackable.reduce((s, d) => s + d.kcal!, 0) / trackable.length) : null;
   const avgGoal = trackable.length ? round(trackable.reduce((s, d) => s + d.goal!, 0) / trackable.length) : null;
   const leaveDays = data.days.filter((d) => d.leave).length;
@@ -139,9 +168,9 @@ export function HistoryPage() {
           <CardTitle className="text-sm text-text-secondary">Adherence</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          <StatTile label="On track" value={String(onTrackDays.length)} sub={`within ${ADHERENCE_TOLERANCE_KCAL} kcal`} />
-          <StatTile label="Over goal" value={String(overDays.length)} sub={`by more than ${ADHERENCE_TOLERANCE_KCAL}`} />
-          <StatTile label="Under goal" value={String(underDays.length)} sub={`by more than ${ADHERENCE_TOLERANCE_KCAL}`} />
+          <StatTile label="On track" value={String(onTrackDays.length)} sub={`within ${ADHERENCE_TOLERANCE_PCT}% (cals + macros)`} />
+          <StatTile label="Over goal" value={String(overDays.length)} sub={`by more than ${ADHERENCE_TOLERANCE_PCT}%`} />
+          <StatTile label="Under goal" value={String(underDays.length)} sub={`by more than ${ADHERENCE_TOLERANCE_PCT}%`} />
           <StatTile label="Avg intake" value={avgKcal !== null ? `${avgKcal} kcal` : "—"} sub={avgGoal !== null ? `goal avg ${avgGoal}` : undefined} />
           <StatTile label="Leave days" value={String(leaveDays)} sub="excluded from stats" />
         </CardContent>
@@ -157,10 +186,10 @@ export function HistoryPage() {
               const isFuture = d.date > todayLocalISODate();
               const isTrackable = !d.leave && !isFuture && d.kcal !== null && d.kcal > 0 && d.goal !== null;
               const noData = !d.leave && !isFuture && !isTrackable;
-              const diff = isTrackable ? d.kcal! - d.goal! : 0;
-              const onTrack = isTrackable && Math.abs(diff) <= ADHERENCE_TOLERANCE_KCAL;
-              const over = isTrackable && diff > ADHERENCE_TOLERANCE_KCAL;
-              const under = isTrackable && diff < -ADHERENCE_TOLERANCE_KCAL;
+              const score = isTrackable ? dayAdherencePct(d) : null;
+              const onTrack = score !== null && Math.abs(score) <= ADHERENCE_TOLERANCE_PCT;
+              const over = score !== null && score > ADHERENCE_TOLERANCE_PCT;
+              const under = score !== null && score < -ADHERENCE_TOLERANCE_PCT;
               return (
                 <div
                   key={d.date}
