@@ -202,7 +202,7 @@ export function PhotoLog({ logDate, onLogged }: { logDate?: string; onLogged: (l
         <div className="flex items-start gap-2 rounded-lg bg-warning/10 p-3 text-xs text-warning">
           <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
           <span>
-            Low confidence ({Math.round(analysis.overallConfidence * 100)}%) — consider logging this via Search or saving it as a Recipe
+            Low confidence ({Math.round(analysis.overallConfidence * 100)}%) — consider logging this via Search
             next time for more accurate results.
           </span>
         </div>

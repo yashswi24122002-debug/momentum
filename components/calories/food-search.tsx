@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import useSWR from "swr";
 import { Search, Star, Clock, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { LogPortionDialog } from "@/components/calories/log-portion-dialog";
+import { QuickAddFoodDialog } from "@/components/calories/quick-add-food-dialog";
 import { fetcher } from "@/lib/swr-fetcher";
 import type { FoodWithServings, FoodLogWithItems, FoodFavouriteWithDetails } from "@/lib/types/calories";
 
@@ -37,6 +37,10 @@ export function FoodSearch({ logDate, onLogged }: { logDate?: string; onLogged: 
   const favourites = (favData?.favourites ?? []).filter((f) => f.foods);
   const recents = recentData?.foods ?? [];
   const [selected, setSelected] = useState<FoodWithServings | null>(null);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // Bumped every time the quick-add dialog opens, so it always mounts fresh
+  // (see key={quickAddSeq} below) even if the same search text is reused.
+  const [quickAddSeq, setQuickAddSeq] = useState(0);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -51,6 +55,14 @@ export function FoodSearch({ logDate, onLogged }: { logDate?: string; onLogged: 
     }, 300);
     return () => clearTimeout(timeout);
   }, [query]);
+
+  // Ready for the next add rather than leaving the last search's results
+  // on screen — logging one food shouldn't require clearing the box by
+  // hand before adding another in the same session.
+  function resetSearch() {
+    setQuery("");
+    setResults(null);
+  }
 
   return (
     <div className="space-y-5">
@@ -102,9 +114,16 @@ export function FoodSearch({ logDate, onLogged }: { logDate?: string; onLogged: 
       ) : results.length === 0 ? (
         <div className="space-y-3">
           <EmptyState icon={Search} title="No matches" description={`Nothing found for "${query}".`} />
-          <Button variant="outline" size="sm" render={<Link href="/calories/foods" />} nativeButton={false}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setQuickAddSeq((s) => s + 1);
+              setQuickAddOpen(true);
+            }}
+          >
             <Plus className="size-3.5" />
-            Create a personal food
+            Create &amp; log &quot;{query}&quot;
           </Button>
         </div>
       ) : (
@@ -115,6 +134,17 @@ export function FoodSearch({ logDate, onLogged }: { logDate?: string; onLogged: 
         </div>
       )}
 
+      <QuickAddFoodDialog
+        key={quickAddSeq}
+        open={quickAddOpen}
+        onOpenChange={setQuickAddOpen}
+        initialName={query}
+        onCreated={(food) => {
+          setQuickAddOpen(false);
+          setSelected(food);
+        }}
+      />
+
       <LogPortionDialog
         key={selected?.id ?? "none"}
         open={selected !== null}
@@ -123,6 +153,7 @@ export function FoodSearch({ logDate, onLogged }: { logDate?: string; onLogged: 
         logDate={logDate}
         onLogged={(log) => {
           setSelected(null);
+          resetSearch();
           onLogged(log);
         }}
       />

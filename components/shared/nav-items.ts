@@ -104,7 +104,6 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Log Food", href: "/calories/log", icon: ScanBarcode },
       { label: "History", href: "/calories/history", icon: History },
       { label: "Foods", href: "/calories/foods", icon: Soup },
-      { label: "Recipes", href: "/calories/recipes", icon: FileText },
       { label: "Settings", href: "/calories/settings", icon: Settings },
     ],
   },

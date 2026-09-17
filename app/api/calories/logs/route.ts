@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { scaleNutrition } from "@/lib/calories/nutrition";
-import { computeRecipeNutrition } from "@/lib/calories/recipe-nutrition";
 
 type ItemInput = {
   food_id?: string | null;
-  recipe_id?: string | null;
   display_name: string;
   quantity: number;
   serving_label: string;
@@ -14,9 +12,9 @@ type ItemInput = {
   source: string;
   confidence: string;
   ai_confidence?: number | null;
-  // Only used (and required) when neither food_id nor recipe_id is set —
-  // the AI-photo/manual-custom path, where there's no reference row to
-  // scale from and the caller supplies the already-determined values.
+  // Only used (and required) when food_id isn't set — the AI-photo/manual-
+  // custom path, where there's no reference row to scale from and the
+  // caller supplies the already-determined values.
   kcal?: number;
   protein_g?: number;
   carbs_g?: number;
@@ -27,14 +25,14 @@ type ItemInput = {
 };
 
 /**
- * Resolves an item's actual stored nutrition. food_id/recipe_id items are
- * always computed server-side from the referenced row's per-100g/per-serving
- * values (never trusting client-sent numbers, which could be stale or
- * tampered) — quantity * serving_g is the total grams consumed. Items with
- * neither reference (custom/AI-photo entries) use the caller-supplied
- * values directly, since there's nothing to scale from.
+ * Resolves an item's actual stored nutrition. A food_id item is always
+ * computed server-side from the referenced row's per-100g values (never
+ * trusting client-sent numbers, which could be stale or tampered) —
+ * quantity * serving_g is the total grams consumed. An item with no
+ * food_id (custom/AI-photo entries) uses the caller-supplied values
+ * directly, since there's nothing to scale from.
  */
-async function resolveItemNutrition(supabase: SupabaseClient, userId: string, item: ItemInput) {
+async function resolveItemNutrition(supabase: SupabaseClient, item: ItemInput) {
   if (item.food_id) {
     const { data: food, error } = await supabase
       .from("foods")
@@ -54,39 +52,13 @@ async function resolveItemNutrition(supabase: SupabaseClient, userId: string, it
     };
   }
 
-  if (item.recipe_id) {
-    const { data: recipe, error } = await supabase
-      .from("recipes")
-      .select("yield_servings, recipe_ingredients(quantity_g, foods(kcal_per_100g, protein_g_per_100g, carbs_g_per_100g, fat_g_per_100g))")
-      .eq("id", item.recipe_id)
-      .eq("user_id", userId)
-      .single();
-    if (error || !recipe) throw new Error(`Recipe ${item.recipe_id} not found`);
-
-    const ingredients = (recipe.recipe_ingredients ?? []).map((ri: { quantity_g: number; foods: unknown }) => ({
-      quantity_g: ri.quantity_g,
-      food: ri.foods,
-    }));
-    const { perServing } = computeRecipeNutrition(ingredients as never, recipe.yield_servings);
-    const servingsEaten = item.quantity;
-    return {
-      kcal: Math.round(perServing.kcal * servingsEaten),
-      protein_g: Math.round(perServing.protein_g * servingsEaten * 10) / 10,
-      carbs_g: Math.round(perServing.carbs_g * servingsEaten * 10) / 10,
-      fat_g: Math.round(perServing.fat_g * servingsEaten * 10) / 10,
-      fibre_g: null,
-      sugar_g: null,
-      sodium_mg: null,
-    };
-  }
-
   if (
     typeof item.kcal !== "number" ||
     typeof item.protein_g !== "number" ||
     typeof item.carbs_g !== "number" ||
     typeof item.fat_g !== "number"
   ) {
-    throw new Error(`Item "${item.display_name}" needs food_id, recipe_id, or explicit kcal/protein_g/carbs_g/fat_g`);
+    throw new Error(`Item "${item.display_name}" needs food_id, or explicit kcal/protein_g/carbs_g/fat_g`);
   }
   return {
     kcal: item.kcal,
@@ -125,7 +97,7 @@ export async function GET(request: NextRequest) {
 // updates the page optimistically," §14 "nothing persists until the user
 // presses Save." One POST = one confirmed meal, however many items it has.
 export async function POST(request: NextRequest) {
-  const { supabase, user, unauthorized } = await requireUser();
+  const { supabase, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
@@ -150,7 +122,7 @@ export async function POST(request: NextRequest) {
   let resolvedItems;
   try {
     resolvedItems = await Promise.all(
-      items.map(async (item) => ({ item, nutrition: await resolveItemNutrition(supabase, user.id, item) }))
+      items.map(async (item) => ({ item, nutrition: await resolveItemNutrition(supabase, item) }))
     );
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Couldn't resolve item nutrition" }, { status: 400 });
@@ -170,7 +142,6 @@ export async function POST(request: NextRequest) {
     resolvedItems.map(({ item, nutrition }) => ({
       food_log_id: log.id,
       food_id: item.food_id ?? null,
-      recipe_id: item.recipe_id ?? null,
       display_name: item.display_name,
       quantity: item.quantity,
       serving_label: item.serving_label,

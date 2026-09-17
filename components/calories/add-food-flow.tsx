@@ -1,13 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { FoodSearch } from "@/components/calories/food-search";
-import { RecipeQuickLog } from "@/components/calories/recipe-quick-log";
 import { BarcodeLog } from "@/components/calories/barcode-log";
 import { PhotoLog } from "@/components/calories/photo-log";
 import { todayLocalISODate } from "@/lib/date";
@@ -24,24 +24,32 @@ export function AddFoodFlow() {
   // param, so an edit made from yesterday's view lands on yesterday.
   const logDate = dateParam && ISO_DATE.test(dateParam) ? dateParam : todayLocalISODate();
   const isToday = logDate === todayLocalISODate();
+  const backHref = isToday ? "/calories" : `/calories?date=${logDate}`;
+  const [loggedCount, setLoggedCount] = useState(0);
 
+  // Used to navigate away after every single item — logging a second or
+  // third food meant leaving and re-opening this page each time. Now it
+  // just confirms and stays put; every tab already resets its own local
+  // state after a log (barcode clears the scanned item, photo clears the
+  // analysis), so it's already ready for the next one.
   function handleLogged() {
-    toast.success("Back to your dashboard…");
-    router.push(isToday ? "/calories" : `/calories?date=${logDate}`);
+    setLoggedCount((c) => c + 1);
+    toast.success("Logged — add another, or tap Done.");
   }
 
   return (
     <div className="flex flex-1 flex-col gap-6 pb-16">
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          render={<Link href={isToday ? "/calories" : `/calories?date=${logDate}`} />}
-          nativeButton={false}
-        >
-          <ArrowLeft className="size-4" />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" render={<Link href={backHref} />} nativeButton={false}>
+            <ArrowLeft className="size-4" />
+          </Button>
+          <h1 className="text-xl font-semibold text-text-primary">{isToday ? "Add Food" : `Add Food — ${logDate}`}</h1>
+        </div>
+        <Button size="sm" onClick={() => router.push(backHref)}>
+          <Check className="size-3.5" />
+          Done{loggedCount > 0 ? ` (${loggedCount})` : ""}
         </Button>
-        <h1 className="text-xl font-semibold text-text-primary">{isToday ? "Add Food" : `Add Food — ${logDate}`}</h1>
       </div>
 
       <Tabs defaultValue="search">
@@ -49,7 +57,6 @@ export function AddFoodFlow() {
           <TabsTrigger value="search">Search</TabsTrigger>
           <TabsTrigger value="barcode">Barcode</TabsTrigger>
           <TabsTrigger value="photo">Photo</TabsTrigger>
-          <TabsTrigger value="recipe">Recipe</TabsTrigger>
         </TabsList>
 
         <TabsContent value="search" className="pt-4">
@@ -62,10 +69,6 @@ export function AddFoodFlow() {
 
         <TabsContent value="photo" className="pt-4">
           <PhotoLog logDate={logDate} onLogged={handleLogged} />
-        </TabsContent>
-
-        <TabsContent value="recipe" className="pt-4">
-          <RecipeQuickLog logDate={logDate} onLogged={handleLogged} />
         </TabsContent>
       </Tabs>
     </div>

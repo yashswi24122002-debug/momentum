@@ -57,26 +57,6 @@ export type Food = {
 
 export type FoodWithServings = Food & { food_servings: FoodServing[] };
 
-export type Recipe = {
-  id: string;
-  name: string;
-  notes: string | null;
-  yield_servings: number;
-  total_cooked_weight_g: number | null;
-  created_at: string;
-};
-
-export type RecipeIngredient = {
-  id: string;
-  recipe_id: string;
-  food_id: string;
-  quantity_g: number;
-  sort_order: number;
-};
-
-export type RecipeIngredientWithFood = RecipeIngredient & { foods: Pick<Food, "id" | "name"> };
-export type RecipeWithIngredients = Recipe & { recipe_ingredients: RecipeIngredientWithFood[] };
-
 export type FoodLog = {
   id: string;
   logged_on: string;
@@ -115,13 +95,11 @@ export type FoodLogWithItems = FoodLog & { food_log_items: FoodLogItem[] };
 export type FoodFavourite = {
   id: string;
   food_id: string | null;
-  recipe_id: string | null;
   created_at: string;
 };
 
 export type FoodFavouriteWithDetails = FoodFavourite & {
   foods: Pick<Food, "id" | "name" | "default_serving_name" | "default_serving_g" | "kcal_per_100g"> | null;
-  recipes: Pick<Recipe, "id" | "name" | "yield_servings"> | null;
 };
 
 /** Nutrition totals, always at whole-kcal/one-decimal-macro precision per the PRD's "no false precision" rule. */

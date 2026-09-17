@@ -12,7 +12,7 @@ import { scaleNutrition } from "@/lib/calories/nutrition";
 import { MEAL_TYPE_ORDER, MEAL_TYPE_LABELS } from "@/lib/calories/ui";
 import { todayLocalISODate } from "@/lib/date";
 import { fetcher } from "@/lib/swr-fetcher";
-import type { FoodWithServings, RecipeWithIngredients, MealType, FoodLogWithItems } from "@/lib/types/calories";
+import type { FoodWithServings, MealType, FoodLogWithItems } from "@/lib/types/calories";
 
 type LastLogged = { quantity: number; serving_label: string; serving_g: number } | null;
 
@@ -22,14 +22,12 @@ export function LogPortionDialog({
   open,
   onOpenChange,
   food,
-  recipe,
   logDate,
   onLogged,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   food?: FoodWithServings | null;
-  recipe?: (RecipeWithIngredients & { perServing: { kcal: number; protein_g: number; carbs_g: number; fat_g: number } }) | null;
   logDate?: string;
   onLogged: (log: FoodLogWithItems) => void;
 }) {
@@ -42,10 +40,10 @@ export function LogPortionDialog({
 
   // Defaults to whatever this user last logged for this exact food (e.g.
   // "250g" for banana shake every time) instead of the catalogue's generic
-  // serving size — only meaningful for a real food, not a recipe, and only
-  // needs to apply once per food selection (the parent remounts this
-  // dialog via `key={food.id}` on each new selection, so this naturally
-  // resets per food rather than needing to track "which food this was for").
+  // serving size — only needs to apply once per food selection (the parent
+  // remounts this dialog via `key={food.id}` on each new selection, so this
+  // naturally resets per food rather than needing to track "which food
+  // this was for").
   const { data: lastLoggedData } = useSWR<{ last: LastLogged }>(
     food ? `/api/calories/foods/${food.id}/last-logged` : null,
     fetcher
@@ -68,19 +66,10 @@ export function LogPortionDialog({
   const servingLabel = servingChoice === CUSTOM_GRAMS ? "g" : servingChoice;
   const qty = Number(quantity) || 0;
 
-  const preview = food
-    ? scaleNutrition(food, servingG * qty)
-    : recipe
-      ? {
-          kcal: Math.round(recipe.perServing.kcal * qty),
-          protein_g: Math.round(recipe.perServing.protein_g * qty * 10) / 10,
-          carbs_g: Math.round(recipe.perServing.carbs_g * qty * 10) / 10,
-          fat_g: Math.round(recipe.perServing.fat_g * qty * 10) / 10,
-        }
-      : { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  const preview = food ? scaleNutrition(food, servingG * qty) : { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
 
   async function handleLog() {
-    if (qty <= 0 || (food && servingG <= 0)) {
+    if (!food || qty <= 0 || servingG <= 0) {
       toast.error("Enter a valid quantity.");
       return;
     }
@@ -92,27 +81,17 @@ export function LogPortionDialog({
       body: JSON.stringify({
         logged_on: logDate ?? todayLocalISODate(),
         meal_type: mealType,
-        source: food ? food.source : "recipe",
+        source: food.source,
         items: [
-          food
-            ? {
-                food_id: food.id,
-                display_name: food.name,
-                quantity: qty,
-                serving_label: servingLabel === "g" ? "g" : servingLabel,
-                serving_g: servingChoice === CUSTOM_GRAMS ? servingG : servingG,
-                source: food.source,
-                confidence: food.confidence,
-              }
-            : {
-                recipe_id: recipe?.id,
-                display_name: recipe?.name,
-                quantity: qty,
-                serving_label: "serving",
-                serving_g: 1,
-                source: "recipe",
-                confidence: "verified",
-              },
+          {
+            food_id: food.id,
+            display_name: food.name,
+            quantity: qty,
+            serving_label: servingLabel,
+            serving_g: servingG,
+            source: food.source,
+            confidence: food.confidence,
+          },
         ],
       }),
     });
@@ -132,7 +111,7 @@ export function LogPortionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{food?.name ?? recipe?.name}</DialogTitle>
+          <DialogTitle>{food?.name}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -141,30 +120,25 @@ export function LogPortionDialog({
               <Label>Quantity</Label>
               <Input type="number" min="0" step="0.5" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
             </div>
-            {food && (
-              <div className="space-y-1.5">
-                <Label>Serving</Label>
-                <Select value={servingChoice} onValueChange={(v) => v && setServingChoice(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {servings.map((s) => (
-                      <SelectItem key={s.id} value={s.label}>
-                        {s.label} ({s.grams}g)
-                      </SelectItem>
-                    ))}
-                    <SelectItem value={CUSTOM_GRAMS}>Custom grams</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {recipe && (
-              <div className="flex items-end pb-1.5 text-xs text-text-muted">servings of this recipe</div>
-            )}
+            <div className="space-y-1.5">
+              <Label>Serving</Label>
+              <Select value={servingChoice} onValueChange={(v) => v && setServingChoice(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {servings.map((s) => (
+                    <SelectItem key={s.id} value={s.label}>
+                      {s.label} ({s.grams}g)
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={CUSTOM_GRAMS}>Custom grams</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {food && servingChoice === CUSTOM_GRAMS && (
+          {servingChoice === CUSTOM_GRAMS && (
             <div className="space-y-1.5">
               <Label>Grams</Label>
               <Input type="number" min="0" value={grams} onChange={(e) => setGrams(e.target.value)} />

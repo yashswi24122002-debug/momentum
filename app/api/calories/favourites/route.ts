@@ -9,7 +9,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("food_favourites")
-    .select("*, foods(id, name, default_serving_name, default_serving_g, kcal_per_100g), recipes(id, name, yield_servings)")
+    .select("*, foods(id, name, default_serving_name, default_serving_g, kcal_per_100g)")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -25,17 +25,13 @@ export async function POST(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const body = await request.json();
-  const { food_id, recipe_id } = body as { food_id?: string; recipe_id?: string };
+  const { food_id } = body as { food_id?: string };
 
-  if (!food_id && !recipe_id) {
-    return NextResponse.json({ error: "food_id or recipe_id is required" }, { status: 400 });
+  if (!food_id) {
+    return NextResponse.json({ error: "food_id is required" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("food_favourites")
-    .insert({ food_id: food_id ?? null, recipe_id: recipe_id ?? null })
-    .select()
-    .single();
+  const { data, error } = await supabase.from("food_favourites").insert({ food_id }).select().single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -50,14 +46,12 @@ export async function DELETE(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const foodId = searchParams.get("food_id");
-  const recipeId = searchParams.get("recipe_id");
 
-  let query = supabase.from("food_favourites").delete().eq("user_id", user.id);
-  if (foodId) query = query.eq("food_id", foodId);
-  else if (recipeId) query = query.eq("recipe_id", recipeId);
-  else return NextResponse.json({ error: "food_id or recipe_id is required" }, { status: 400 });
+  if (!foodId) {
+    return NextResponse.json({ error: "food_id is required" }, { status: 400 });
+  }
 
-  const { error } = await query;
+  const { error } = await supabase.from("food_favourites").delete().eq("user_id", user.id).eq("food_id", foodId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
