@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { ArrowLeft, Sparkles, Loader2, Download, Search, Send, User } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, Download, Eye, Search, Send, User } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { createClient } from "@/lib/supabase/client";
 import { fetcher } from "@/lib/swr-fetcher";
-import { downloadResumePdf, resumePdfBlob } from "@/lib/jobs/resume-pdf";
-import { downloadCoverLetterPdf, coverLetterPdfBlob } from "@/lib/jobs/cover-letter-pdf";
+import { downloadResumePdf, previewResumePdf, resumePdfBlob } from "@/lib/jobs/resume-pdf";
+import { downloadCoverLetterPdf, previewCoverLetterPdf, coverLetterPdfBlob } from "@/lib/jobs/cover-letter-pdf";
 import { APPLICATION_STATUS_LABELS, APPLICATION_STATUS_TONES } from "@/lib/jobs/ui";
 import type { JobApplication } from "@/lib/types/resume";
 import type { HunterContact } from "@/lib/integrations/hunter";
@@ -211,9 +211,28 @@ export function ApplicationDetail({ id }: { id: string }) {
           ) : (
             <>
               <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => previewResumePdf(application.tailored_resume!)}>
+                  <Eye className="size-3.5" />
+                  Preview resume
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => downloadResumePdf(application.tailored_resume!)}>
                   <Download className="size-3.5" />
                   Resume PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    previewCoverLetterPdf({
+                      applicantName: application.tailored_resume!.name,
+                      company: application.company,
+                      roleTitle: application.role_title,
+                      bodyText: application.cover_letter_text ?? "",
+                    })
+                  }
+                >
+                  <Eye className="size-3.5" />
+                  Preview cover letter
                 </Button>
                 <Button
                   variant="outline"

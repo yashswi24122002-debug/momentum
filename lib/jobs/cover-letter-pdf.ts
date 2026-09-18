@@ -60,6 +60,11 @@ export function downloadCoverLetterPdf(params: { applicantName: string; company:
   renderCoverLetterPdf(params).save(`${slugify(params.company)}-cover-letter.pdf`);
 }
 
+/** Opens the PDF in a new tab for viewing — no file gets saved to disk. */
+export function previewCoverLetterPdf(params: { applicantName: string; company: string; roleTitle: string; bodyText: string }) {
+  renderCoverLetterPdf(params).output("dataurlnewwindow");
+}
+
 export function coverLetterPdfBlob(params: { applicantName: string; company: string; roleTitle: string; bodyText: string }): Blob {
   return renderCoverLetterPdf(params).output("blob");
 }

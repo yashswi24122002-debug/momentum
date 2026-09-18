@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { fetcher } from "@/lib/swr-fetcher";
-import { downloadResumePdf } from "@/lib/jobs/resume-pdf";
+import { previewResumePdf } from "@/lib/jobs/resume-pdf";
 import type { ResumeContent } from "@/lib/types/resume";
 
 const EMPTY: ResumeContent = {
@@ -129,7 +129,7 @@ export function ResumeProfileEditor() {
             <Sparkles className="size-3.5" />
             Import from text
           </Button>
-          <Button variant="outline" size="sm" onClick={() => downloadResumePdf(resume)}>
+          <Button variant="outline" size="sm" onClick={() => previewResumePdf(resume)}>
             <Download className="size-3.5" />
             Preview PDF
           </Button>
