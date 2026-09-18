@@ -18,6 +18,7 @@ import { downloadResumePdf, previewResumePdf, resumePdfBlob } from "@/lib/jobs/r
 import { downloadCoverLetterPdf, previewCoverLetterPdf, coverLetterPdfBlob } from "@/lib/jobs/cover-letter-pdf";
 import { APPLICATION_STATUS_LABELS, APPLICATION_STATUS_TONES } from "@/lib/jobs/ui";
 import type { JobApplication } from "@/lib/types/resume";
+import type { OutreachMode } from "@/app/api/job-applications/[id]/draft-outreach/route";
 
 const DOCUMENTS_BUCKET = "documents";
 
@@ -27,6 +28,7 @@ export function ApplicationDetail({ id }: { id: string }) {
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [contactEmail, setContactEmail] = useState("");
   const [contactName, setContactName] = useState("");
+  const [outreachMode, setOutreachMode] = useState<OutreachMode>("hiring_team");
   const [drafting, setDrafting] = useState(false);
   const [emailDraft, setEmailDraft] = useState<{ contact_email: string; subject: string; body: string } | null>(null);
   const [sending, setSending] = useState(false);
@@ -101,6 +103,7 @@ export function ApplicationDetail({ id }: { id: string }) {
         contact_email: contactEmail.trim(),
         contact_first_name: firstName ?? null,
         contact_last_name: restName.join(" ") || null,
+        outreach_mode: outreachMode,
       }),
     });
     setDrafting(false);
@@ -272,6 +275,27 @@ export function ApplicationDetail({ id }: { id: string }) {
               <div className="space-y-1.5">
                 <Label>Contact name (optional)</Label>
                 <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Jane Doe" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Who is this?</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={outreachMode === "hiring_team" ? "default" : "outline"}
+                  onClick={() => setOutreachMode("hiring_team")}
+                >
+                  Hiring team / HR
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={outreachMode === "referral" ? "default" : "outline"}
+                  onClick={() => setOutreachMode("referral")}
+                >
+                  Employee — asking for a referral
+                </Button>
               </div>
             </div>
             <Button size="sm" onClick={draftOutreach} disabled={drafting || !contactEmail.trim()}>

@@ -26,10 +26,13 @@ const ResumeContentSchema = z.object({
 
 const TailorResponseSchema = z.object({
   tailored_resume: ResumeContentSchema,
-  cover_letter: z
+  // Only the body — the salutation ("Dear Hiring Manager,") and sign-off
+  // ("Sincerely, name") are composed below instead of trusted to the
+  // model, so the approved cover-letter format is guaranteed every time.
+  cover_letter_body: z
     .string()
     .describe(
-      "A complete, ready-to-send cover letter body (no salutation-only stub) — 3-4 paragraphs, plain text, blank line between paragraphs. First-person, genuine tone, not generic filler."
+      "ONLY the body paragraphs of a cover letter, no salutation and no sign-off: an opening paragraph expressing genuine interest in this specific role/company, 1-2 middle paragraphs connecting concrete experience/projects to what the job description actually asks for, and a closing paragraph reiterating interest and mentioning the attached resume. Plain text, blank line between paragraphs, first-person, genuine tone, not generic filler."
     ),
 });
 
@@ -53,7 +56,7 @@ Hard rules for tailored_resume:
 - Skills: you may reorder the categories and the items within a category to foreground what's most relevant to this job, and may drop an item that's genuinely irrelevant clutter, but never add a skill that wasn't in the original list.
 - Return every field of the resume, including parts you didn't change.
 
-For cover_letter: reference 1-2 concrete things from the resume that map to what the job description actually asks for. No placeholder brackets — use the real company/role name.`;
+For cover_letter_body: reference 1-2 concrete things from the resume that map to what the job description actually asks for. No placeholder brackets — use the real company/role name. Do not write a greeting or a sign-off — start directly with the opening paragraph.`;
 }
 
 export async function POST(
@@ -132,11 +135,14 @@ export async function POST(
     location: baseResume.location,
   };
 
+  // The approved format's mechanical parts — never left to the model.
+  const fullCoverLetter = `Dear Hiring Manager,\n\n${result.cover_letter_body.trim()}\n\nSincerely,\n${baseResume.name}`;
+
   const { data: updated, error: updateError } = await supabase
     .from("job_applications")
     .update({
       tailored_resume: tailoredResume,
-      cover_letter_text: result.cover_letter,
+      cover_letter_text: fullCoverLetter,
       status: "tailored",
       updated_at: new Date().toISOString(),
     })

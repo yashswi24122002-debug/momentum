@@ -8,26 +8,42 @@ import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-c
 import { logError } from "@/lib/errors/log-error";
 import type { ResumeContent } from "@/lib/types/resume";
 
+export type OutreachMode = "referral" | "hiring_team";
+
+// The AI only ever writes the persuasive middle — greeting, thanks line,
+// and sign-off are composed below instead of trusted to the model, so the
+// approved format (Hi X, / ... / thank you for your consideration /
+// Regards, name, phone) is guaranteed every single time, not just usually.
 const DraftSchema = z.object({
   subject: z.string().describe("A short, specific email subject line — not generic ('Application for X role' is too generic; reference the actual company/role)."),
-  body: z.string().describe("The full email body, plain text, first-person, ready to send after light editing. No placeholders like [Company Name] — use the real values given."),
+  body: z
+    .string()
+    .describe(
+      "ONLY the middle of the email: 1-2 sentences on the specific role and why it caught your attention, then 1-2 sentences connecting concrete skills/experience to what the role needs, then the ask. Do NOT include a greeting (no 'Hi'/'Dear'), do NOT include a thank-you closing line, do NOT include a sign-off (no 'Regards'/name/phone) — those are added separately. Plain text, first-person, no placeholders like [Company Name]."
+    ),
 });
 
 function buildPrompt(
-  application: { company: string; role_title: string; url: string | null; jd_text: string },
+  application: { company: string; role_title: string; jd_text: string },
   resume: ResumeContent | null,
+  mode: OutreachMode,
   contactFirstName: string | null
 ): string {
   const topSkills = resume?.skills.flatMap((s) => s.items).slice(0, 8).join(", ");
-  return `Write a short, genuine cold-outreach email from me to ${contactFirstName ? `${contactFirstName}, a` : "a"} recruiter/hiring contact at ${application.company}, about their "${application.role_title}" role.
+  const askInstruction =
+    mode === "referral"
+      ? `This person is a peer/employee at the company (not necessarily HR) — the ask should be casual-professional: politely ask if they'd be willing to refer you internally for this role, or point you to the right person to talk to.`
+      : `This person is the recruiter/hiring contact — the ask should be direct: express clear interest in being considered for the role, and offer to share more or discuss further.`;
 
-Tone: direct, confident, not desperate, not overly formal. 3-4 short paragraphs max. Mention 1-2 concrete technical skills that plausibly match the role (infer from the job description below — don't invent skills that don't fit).${
+  return `Write the middle section of a short, genuine cold-outreach email from me${contactFirstName ? ` to ${contactFirstName}` : ""} about ${application.company}'s "${application.role_title}" role.
+
+${askInstruction}
+
+Tone: direct, confident, not desperate, not overly formal. Mention 1-2 concrete technical skills that plausibly match the role (infer from the job description below — don't invent skills that don't fit).${
     topSkills ? ` My actual skills include: ${topSkills}.` : ""
-  } End with a clear, low-friction ask (a quick call, or just "happy to share more"). Avoid generic mass-cold-email phrasing that trips spam filters (e.g. heavy use of "quick call", exclamation points, all-caps words, or a hard sales pitch tone) — keep it reading like a real one-to-one email.
+  } Avoid generic mass-cold-email phrasing that trips spam filters (heavy use of "quick call", exclamation points, all-caps words, a hard sales pitch tone) — keep it reading like a real one-to-one message.
 
 My resume and a tailored cover letter will genuinely be attached to this email as files — you may say something like "I've attached my resume and a cover letter" once, but never state or invent filenames.
-
-Greeting: ${contactFirstName ? `open with "Hi ${contactFirstName},"` : `I don't know the recipient's name — open with "Hi there," and never use a bracketed placeholder like [Name].`}
 
 Job description:
 ${application.jd_text.slice(0, 2000)}`;
@@ -53,10 +69,11 @@ export async function POST(
 
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
-  const { contact_email, contact_first_name, contact_last_name } = body as {
+  const { contact_email, contact_first_name, contact_last_name, outreach_mode } = body as {
     contact_email?: string;
     contact_first_name?: string | null;
     contact_last_name?: string | null;
+    outreach_mode?: OutreachMode;
   };
 
   // Contact-finding (Hunter.io) was removed — the user always enters the
@@ -64,6 +81,7 @@ export async function POST(
   if (!contact_email?.trim()) {
     return NextResponse.json({ error: "contact_email is required" }, { status: 400 });
   }
+  const mode: OutreachMode = outreach_mode === "referral" ? "referral" : "hiring_team";
 
   const { data: application, error: fetchError } = await supabase
     .from("job_applications")
@@ -86,7 +104,7 @@ export async function POST(
     draft = await generateContentAsUser(
       user.id,
       isAdmin,
-      buildPrompt(application, resume, contact_first_name ?? null),
+      buildPrompt(application, resume, mode, contact_first_name ?? null),
       DraftSchema
     );
   } catch (error) {
@@ -98,13 +116,19 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
+  // The approved format's mechanical parts — never left to the model.
+  const greeting = contact_first_name ? `Hi ${contact_first_name},` : "Hi team,";
+  const closingLine = "Thank you so much for your time and consideration.";
+  const signoffLines = [resume?.name, resume?.mobile].filter(Boolean).join("\n");
+  const fullBody = `${greeting}\n\n${draft.body.trim()}\n\n${closingLine}\n\nRegards,\n${signoffLines}`;
+
   const { data: updated, error: updateError } = await supabase
     .from("job_applications")
     .update({
       contact_email: finalContactEmail,
       contact_name: finalContactName,
       email_subject: draft.subject,
-      email_body_draft: draft.body,
+      email_body_draft: fullBody,
       status: "contact_found",
       updated_at: new Date().toISOString(),
     })
