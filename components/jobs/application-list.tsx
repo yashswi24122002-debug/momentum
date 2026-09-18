@@ -130,7 +130,7 @@ export function ApplicationList() {
       )}
 
       <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New application</DialogTitle>
           </DialogHeader>
@@ -151,7 +151,13 @@ export function ApplicationList() {
             </div>
             <div className="space-y-1.5">
               <Label>Job description</Label>
-              <Textarea rows={8} value={jdText} onChange={(e) => setJdText(e.target.value)} placeholder="Paste the full JD here…" />
+              <Textarea
+                rows={8}
+                value={jdText}
+                onChange={(e) => setJdText(e.target.value)}
+                placeholder="Paste the full JD here…"
+                className="max-h-64 overflow-y-auto"
+              />
             </div>
             <DialogFooter>
               <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>

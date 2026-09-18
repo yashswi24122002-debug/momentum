@@ -418,7 +418,7 @@ export function ResumeProfileEditor() {
       </SectionCard>
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Import from pasted text</DialogTitle>
           </DialogHeader>
@@ -431,6 +431,7 @@ export function ResumeProfileEditor() {
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
             placeholder="Paste your resume text here…"
+            className="max-h-64 overflow-y-auto"
           />
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>

@@ -10,40 +10,50 @@ import type { ResumeContent } from "@/lib/types/resume";
 
 export type OutreachMode = "referral" | "hiring_team";
 
-// The AI only ever writes the persuasive middle — greeting, thanks line,
-// and sign-off are composed below instead of trusted to the model, so the
-// approved format (Hi X, / ... / thank you for your consideration /
-// Regards, name, phone) is guaranteed every single time, not just usually.
+// Fixed wording for the ask — a declarative statement, never a question
+// ("Would you be open to...?" reads weaker and was explicitly rejected in
+// favor of this phrasing). Kept out of the model's hands entirely, same
+// reasoning as the greeting/sign-off: exact wording that matters isn't
+// left to chance.
+const ASK_TEXT: Record<OutreachMode, string> = {
+  referral:
+    "I would greatly appreciate a referral for the role, or, if appropriate, being directed to the relevant person on the team who I could connect with regarding the opportunity.",
+  hiring_team:
+    "I would greatly appreciate the opportunity to be considered for this role, and would be happy to share more information or discuss further at your convenience.",
+};
+
+// The AI only ever writes the role mention + skills-match bullets —
+// greeting, thanks line, sign-off, and the ask are all composed below
+// instead of trusted to the model, so the approved format (Hi X, / role
+// mention / skills as actual bullet points / fixed non-question ask /
+// thank you for your consideration / Regards, name, phone) is guaranteed
+// every single time, not just usually.
 const DraftSchema = z.object({
   subject: z.string().describe("A short, specific email subject line — not generic ('Application for X role' is too generic; reference the actual company/role)."),
-  body: z
+  role_mention: z
     .string()
     .describe(
-      "ONLY the middle of the email: 1-2 sentences on the specific role and why it caught your attention, then 1-2 sentences connecting concrete skills/experience to what the role needs, then the ask. Do NOT include a greeting (no 'Hi'/'Dear'), do NOT include a thank-you closing line, do NOT include a sign-off (no 'Regards'/name/phone) — those are added separately. Plain text, first-person, no placeholders like [Company Name]."
+      "1-2 sentences, plain prose (not a list), on the specific role and what about it caught your attention. No greeting, no sign-off."
+    ),
+  skills_match: z
+    .array(z.string())
+    .min(2)
+    .max(4)
+    .describe(
+      "2-4 short bullet points (each item is ONE bullet, one sentence, not a paragraph), each connecting one concrete skill/technology/experience from the resume to something specific the job description actually asks for. Infer from the job description — don't invent skills that don't fit."
     ),
 });
 
 function buildPrompt(
   application: { company: string; role_title: string; jd_text: string },
-  resume: ResumeContent | null,
-  mode: OutreachMode,
-  contactFirstName: string | null
+  resume: ResumeContent | null
 ): string {
   const topSkills = resume?.skills.flatMap((s) => s.items).slice(0, 8).join(", ");
-  const askInstruction =
-    mode === "referral"
-      ? `This person is a peer/employee at the company (not necessarily HR) — the ask should be casual-professional: politely ask if they'd be willing to refer you internally for this role, or point you to the right person to talk to.`
-      : `This person is the recruiter/hiring contact — the ask should be direct: express clear interest in being considered for the role, and offer to share more or discuss further.`;
+  return `Write two things for a short, genuine cold-outreach email about ${application.company}'s "${application.role_title}" role: (1) a brief role_mention, and (2) 2-4 skills_match bullets.
 
-  return `Write the middle section of a short, genuine cold-outreach email from me${contactFirstName ? ` to ${contactFirstName}` : ""} about ${application.company}'s "${application.role_title}" role.
-
-${askInstruction}
-
-Tone: direct, confident, not desperate, not overly formal. Mention 1-2 concrete technical skills that plausibly match the role (infer from the job description below — don't invent skills that don't fit).${
+Tone: direct, confident, not desperate, not overly formal.${
     topSkills ? ` My actual skills include: ${topSkills}.` : ""
-  } Avoid generic mass-cold-email phrasing that trips spam filters (heavy use of "quick call", exclamation points, all-caps words, a hard sales pitch tone) — keep it reading like a real one-to-one message.
-
-My resume and a tailored cover letter will genuinely be attached to this email as files — you may say something like "I've attached my resume and a cover letter" once, but never state or invent filenames.
+  } Avoid generic mass-cold-email phrasing that trips spam filters (heavy use of "quick call", exclamation points, all-caps words, a hard sales pitch tone) — keep it reading like a real one-to-one message, not a form letter.
 
 Job description:
 ${application.jd_text.slice(0, 2000)}`;
@@ -101,12 +111,7 @@ export async function POST(
 
   let draft: z.infer<typeof DraftSchema>;
   try {
-    draft = await generateContentAsUser(
-      user.id,
-      isAdmin,
-      buildPrompt(application, resume, mode, contact_first_name ?? null),
-      DraftSchema
-    );
+    draft = await generateContentAsUser(user.id, isAdmin, buildPrompt(application, resume), DraftSchema);
   } catch (error) {
     await logError(supabase, "job-applications/draft-outreach", error instanceof Error ? error.message : String(error), { applicationId: id });
     const message =
@@ -118,9 +123,11 @@ export async function POST(
 
   // The approved format's mechanical parts — never left to the model.
   const greeting = contact_first_name ? `Hi ${contact_first_name},` : "Hi team,";
+  const skillsBullets = draft.skills_match.map((s) => `- ${s}`).join("\n");
+  const attachmentLine = "I've attached my resume and a tailored cover letter for a closer look at my work.";
   const closingLine = "Thank you so much for your time and consideration.";
   const signoffLines = [resume?.name, resume?.mobile].filter(Boolean).join("\n");
-  const fullBody = `${greeting}\n\n${draft.body.trim()}\n\n${closingLine}\n\nRegards,\n${signoffLines}`;
+  const fullBody = `${greeting}\n\n${draft.role_mention.trim()}\n\n${skillsBullets}\n\n${attachmentLine} ${ASK_TEXT[mode]}\n\n${closingLine}\n\nRegards,\n${signoffLines}`;
 
   const { data: updated, error: updateError } = await supabase
     .from("job_applications")
