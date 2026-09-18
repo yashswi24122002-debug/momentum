@@ -5,16 +5,8 @@ import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
 import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
-import { findContactsForDomain, guessDomain, domainFromUrl, type HunterContact } from "@/lib/integrations/hunter";
 import { logError } from "@/lib/errors/log-error";
 import type { ResumeContent } from "@/lib/types/resume";
-
-const RECRUITING_HINTS = ["recruit", "talent", "hr", "people", "hiring"];
-
-function pickBestContact(contacts: HunterContact[]) {
-  const recruiting = contacts.find((c) => RECRUITING_HINTS.some((h) => c.position?.toLowerCase().includes(h)));
-  return recruiting ?? contacts[0] ?? null;
-}
 
 const DraftSchema = z.object({
   subject: z.string().describe("A short, specific email subject line — not generic ('Application for X role' is too generic; reference the actual company/role)."),
@@ -67,6 +59,12 @@ export async function POST(
     contact_last_name?: string | null;
   };
 
+  // Contact-finding (Hunter.io) was removed — the user always enters the
+  // contact email manually now, so there's nothing to fall back to.
+  if (!contact_email?.trim()) {
+    return NextResponse.json({ error: "contact_email is required" }, { status: 400 });
+  }
+
   const { data: application, error: fetchError } = await supabase
     .from("job_applications")
     .select("*")
@@ -78,18 +76,8 @@ export async function POST(
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
   }
 
-  let finalContactEmail = contact_email ?? null;
-  let finalContactName = [contact_first_name, contact_last_name].filter(Boolean).join(" ") || null;
-
-  if (!finalContactEmail) {
-    const domain = domainFromUrl(application.url) ?? guessDomain(application.company);
-    const { contacts } = await findContactsForDomain(domain);
-    const best = pickBestContact(contacts);
-    if (best) {
-      finalContactEmail = best.email;
-      finalContactName = [best.firstName, best.lastName].filter(Boolean).join(" ") || null;
-    }
-  }
+  const finalContactEmail = contact_email.trim();
+  const finalContactName = [contact_first_name, contact_last_name].filter(Boolean).join(" ") || null;
 
   const resume = (application.tailored_resume as ResumeContent | null) ?? null;
 
@@ -117,7 +105,7 @@ export async function POST(
       contact_name: finalContactName,
       email_subject: draft.subject,
       email_body_draft: draft.body,
-      status: finalContactEmail ? "contact_found" : application.status,
+      status: "contact_found",
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)

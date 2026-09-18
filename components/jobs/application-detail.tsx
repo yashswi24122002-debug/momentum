@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { ArrowLeft, Sparkles, Loader2, Download, Eye, Search, Send, User } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, Download, Eye, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,6 @@ import { downloadResumePdf, previewResumePdf, resumePdfBlob } from "@/lib/jobs/r
 import { downloadCoverLetterPdf, previewCoverLetterPdf, coverLetterPdfBlob } from "@/lib/jobs/cover-letter-pdf";
 import { APPLICATION_STATUS_LABELS, APPLICATION_STATUS_TONES } from "@/lib/jobs/ui";
 import type { JobApplication } from "@/lib/types/resume";
-import type { HunterContact } from "@/lib/integrations/hunter";
 
 const DOCUMENTS_BUCKET = "documents";
 
@@ -26,8 +25,8 @@ export function ApplicationDetail({ id }: { id: string }) {
   const { data, mutate } = useSWR<{ application: JobApplication }>(`/api/job-applications/${id}`, fetcher);
   const [tailoring, setTailoring] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
-  const [contacts, setContacts] = useState<HunterContact[] | null>(null);
-  const [checkingContact, setCheckingContact] = useState(false);
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactName, setContactName] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [emailDraft, setEmailDraft] = useState<{ contact_email: string; subject: string; body: string } | null>(null);
   const [sending, setSending] = useState(false);
@@ -88,28 +87,20 @@ export function ApplicationDetail({ id }: { id: string }) {
     setUploadingAttachments(false);
   }
 
-  async function checkContact() {
-    setCheckingContact(true);
-    const res = await fetch(`/api/job-applications/${id}/check-contact`, { method: "POST" });
-    setCheckingContact(false);
-    if (!res.ok) {
-      toast.error("Couldn't look up a contact — try again.");
+  async function draftOutreach() {
+    if (!contactEmail.trim()) {
+      toast.error("Enter the contact's email first.");
       return;
     }
-    const { contacts: found } = await res.json();
-    setContacts(found ?? []);
-    if (!found || found.length === 0) toast.error("No contacts found for that domain.");
-  }
-
-  async function draftOutreach(contact?: HunterContact) {
     setDrafting(true);
+    const [firstName, ...restName] = contactName.trim().split(/\s+/).filter(Boolean);
     const res = await fetch(`/api/job-applications/${id}/draft-outreach`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contact_email: contact?.email,
-        contact_first_name: contact?.firstName ?? null,
-        contact_last_name: contact?.lastName ?? null,
+        contact_email: contactEmail.trim(),
+        contact_first_name: firstName ?? null,
+        contact_last_name: restName.join(" ") || null,
       }),
     });
     setDrafting(false);
@@ -267,37 +258,25 @@ export function ApplicationDetail({ id }: { id: string }) {
         </CardContent>
       </Card>
 
-      {application.tailored_resume && (
+      {application.tailored_resume && !emailDraft && !application.email_body_draft && (
         <Card className="border-border bg-surface">
           <CardHeader>
-            <CardTitle className="text-sm text-text-secondary">Find a contact</CardTitle>
+            <CardTitle className="text-sm text-text-secondary">Contact</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button variant="outline" size="sm" onClick={checkContact} disabled={checkingContact}>
-              {checkingContact ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
-              {checkingContact ? "Looking…" : "Find a contact at this company"}
-            </Button>
-            {contacts && contacts.length > 0 && (
-              <div className="space-y-2">
-                {contacts.map((c) => (
-                  <div key={c.email} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-sm">
-                    <div className="min-w-0">
-                      <p className="truncate text-text-primary">
-                        {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.email}
-                      </p>
-                      <p className="truncate text-xs text-text-muted">{c.position ?? c.email}</p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => draftOutreach(c)} disabled={drafting}>
-                      <User className="size-3.5" />
-                      Draft to them
-                    </Button>
-                  </div>
-                ))}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Contact email</Label>
+                <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="name@company.com" />
               </div>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => draftOutreach()} disabled={drafting}>
+              <div className="space-y-1.5">
+                <Label>Contact name (optional)</Label>
+                <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Jane Doe" />
+              </div>
+            </div>
+            <Button size="sm" onClick={draftOutreach} disabled={drafting || !contactEmail.trim()}>
               {drafting ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-              {drafting ? "Drafting…" : "Draft anyway (no contact found)"}
+              {drafting ? "Drafting…" : "Draft outreach email"}
             </Button>
           </CardContent>
         </Card>

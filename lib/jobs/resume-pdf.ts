@@ -2,7 +2,10 @@ import { jsPDF } from "jspdf";
 import type { ResumeContent } from "@/lib/types/resume";
 
 const MARGIN = 14;
-const FONT = "times";
+// jsPDF's built-in "times" font has broken kerning at bold/larger sizes
+// (visibly wide letter-spacing, confirmed by actually rendering and
+// inspecting the output) — helvetica is the reliable one.
+const FONT = "helvetica";
 const INK = { primary: [10, 10, 10] as const, secondary: [30, 30, 30] as const, muted: [60, 60, 60] as const };
 
 function slugify(text: string): string {
@@ -16,14 +19,17 @@ function slugify(text: string): string {
 }
 
 /**
- * Mirrors the user's actual LaTeX resume format (the classic "xprilion"
- * one-page template — resumeFormat.md is its source) as closely as jsPDF's
- * primitives allow: a dense, tightly-spaced single page, a 3-row header
- * (name+email / github+mobile / linkedin+location, not centered), and
- * education's dates on the detail line rather than next to the
- * institution name. `scale` shrinks every size/spacing uniformly —
- * renderResumePdfFitted() below re-renders at a smaller scale until it
- * actually fits on one page, rather than silently spilling to a second.
+ * Mirrors the user's actual LaTeX resume format (resumeFormat.md) as
+ * closely as jsPDF's primitives allow: labelled header fields (Email:/
+ * Github:/Mobile:/LinkedIn:/Location:), a filled bullet in front of each
+ * Education/Experience subheading block (LaTeX's outer itemize), hollow
+ * circle bullets for job description lines (LaTeX's nested itemize —
+ * \labelitemii is \circ), small-caps-style section headings (faked: a
+ * larger capital first letter followed by smaller capitals, since jsPDF
+ * has no real small-caps support), and the same dense, tightly-spaced
+ * one-page layout. `scale` shrinks every size/spacing uniformly —
+ * renderResumePdf() below re-renders at a smaller scale until it actually
+ * fits on one page, rather than silently spilling to a second.
  */
 function buildDoc(resume: ResumeContent, scale: number): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -54,14 +60,14 @@ function buildDoc(resume: ResumeContent, scale: number): jsPDF {
   function twoCol(
     left: string,
     right: string,
-    opts: { leftSize: number; leftBold?: boolean; leftItalic?: boolean; rightSize?: number; rightItalic?: boolean }
+    opts: { leftSize: number; leftBold?: boolean; leftItalic?: boolean; rightSize?: number; rightItalic?: boolean; x?: number }
   ) {
     const lineHeight = gap(opts.leftSize * 0.42);
     ensureSpace(lineHeight);
     doc.setFont(FONT, opts.leftBold ? "bold" : opts.leftItalic ? "italic" : "normal");
     doc.setFontSize(sz(opts.leftSize));
     setInk(INK.primary);
-    doc.text(left, MARGIN, y);
+    doc.text(left, opts.x ?? MARGIN, y);
     if (right) {
       doc.setFont(FONT, opts.rightItalic ? "italic" : "normal");
       doc.setFontSize(sz(opts.rightSize ?? opts.leftSize));
@@ -71,13 +77,37 @@ function buildDoc(resume: ResumeContent, scale: number): jsPDF {
     y += lineHeight;
   }
 
+  /** A bulleted 2-line subheading block (Education/Experience) — one filled bullet in front of the whole block, both lines indented under it. */
+  function subheadingBlock(
+    lines: { left: string; right: string; size: number; bold?: boolean; italic?: boolean }[]
+  ) {
+    const indent = gap(4.5);
+    ensureSpace(gap(lines[0].size * 0.42));
+    doc.setFont(FONT, "normal");
+    doc.setFontSize(sz(10));
+    setInk(INK.primary);
+    doc.text("•", MARGIN, y);
+    for (const line of lines) {
+      if (!line.left && !line.right) continue;
+      twoCol(line.left, line.right, { leftSize: line.size, leftBold: line.bold, leftItalic: line.italic, rightItalic: line.italic, x: MARGIN + indent });
+    }
+  }
+
+  // Fakes small caps (jsPDF has no real small-caps support): a larger
+  // capital first letter followed by the rest of the word in smaller
+  // capitals — the closest practical approximation of \scshape.
   function heading(text: string) {
     ensureSpace(gap(9));
     y += gap(3);
+    const first = text.charAt(0).toUpperCase();
+    const rest = text.slice(1).toUpperCase();
     doc.setFont(FONT, "bold");
-    doc.setFontSize(sz(12));
     setInk(INK.primary);
-    doc.text(text.toUpperCase(), MARGIN, y);
+    doc.setFontSize(sz(12.5));
+    doc.text(first, MARGIN, y);
+    const firstWidth = doc.getTextWidth(first);
+    doc.setFontSize(sz(10));
+    doc.text(rest, MARGIN + firstWidth, y);
     y += gap(1);
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
@@ -85,34 +115,38 @@ function buildDoc(resume: ResumeContent, scale: number): jsPDF {
     y += gap(4.2);
   }
 
-  function bullet(text: string) {
+  function bullet(text: string, marker: string, indent: number) {
     doc.setFont(FONT, "normal");
     doc.setFontSize(sz(9.3));
     setInk(INK.secondary);
-    const indent = gap(4);
     const lineHeight = gap(3.9);
     const lines: string[] = doc.splitTextToSize(text, contentWidth - indent);
     lines.forEach((line, i) => {
       ensureSpace(lineHeight);
-      doc.text(i === 0 ? `• ${line}` : `  ${line}`, MARGIN + indent, y);
+      doc.text(i === 0 ? `${marker} ${line}` : `  ${line}`, MARGIN + indent, y);
       y += lineHeight;
     });
     y += gap(0.4);
   }
+  const outerBullet = (text: string) => bullet(text, "•", gap(4));
+  // "◦" (hollow circle, matching LaTeX's nested \circ marker) isn't in
+  // jsPDF's built-in font encoding and renders as garbage — "o" is the
+  // closest ASCII-safe stand-in.
+  const innerBullet = (text: string) => bullet(text, "o", gap(8.5));
 
-  // ---- Header: 3 rows, name/email, github/mobile, linkedin/location ----
-  twoCol(resume.name || "Resume", resume.email ?? "", { leftSize: 17, leftBold: true, rightSize: 9.5 });
-  twoCol(resume.github ?? "", resume.mobile ?? "", { leftSize: 9.5, rightSize: 9.5 });
-  twoCol(resume.linkedin ?? "", resume.location ?? "", { leftSize: 9.5, rightSize: 9.5 });
+  // ---- Header: 3 labelled rows, name+email / github+mobile / linkedin+location ----
+  twoCol(resume.name || "Resume", resume.email ? `Email: ${resume.email}` : "", { leftSize: 17, leftBold: true, rightSize: 9.5 });
+  twoCol(resume.github ? `Github: ${resume.github}` : "", resume.mobile ? `Mobile: ${resume.mobile}` : "", { leftSize: 9.5, rightSize: 9.5 });
+  twoCol(resume.linkedin ? `LinkedIn: ${resume.linkedin}` : "", resume.location ? `Location: ${resume.location}` : "", { leftSize: 9.5, rightSize: 9.5 });
   y += gap(1);
 
   if (resume.education.length > 0) {
     heading("Education");
     for (const edu of resume.education) {
-      twoCol(edu.institution, "", { leftSize: 10, leftBold: true });
-      if (edu.detail || edu.dates) {
-        twoCol(edu.detail, edu.dates, { leftSize: 9.3, leftItalic: true, rightItalic: true });
-      }
+      subheadingBlock([
+        { left: edu.institution, right: "", size: 10, bold: true },
+        { left: edu.detail, right: edu.dates, size: 9.3, italic: true },
+      ]);
       y += gap(1);
     }
   }
@@ -120,17 +154,19 @@ function buildDoc(resume: ResumeContent, scale: number): jsPDF {
   if (resume.skills.length > 0) {
     heading("Skills Summary");
     for (const group of resume.skills) {
-      bullet(`${group.category}: ${group.items.join(", ")}`);
+      outerBullet(`${group.category}: ${group.items.join(", ")}`);
     }
   }
 
   if (resume.experience.length > 0) {
     heading("Experience");
     for (const job of resume.experience) {
-      twoCol(job.company, job.location, { leftSize: 10.2, leftBold: true });
-      twoCol(job.role, job.dates, { leftSize: 9.3, leftItalic: true, rightItalic: true });
+      subheadingBlock([
+        { left: job.company, right: job.location, size: 10.2, bold: true },
+        { left: job.role, right: job.dates, size: 9.3, italic: true },
+      ]);
       y += gap(0.6);
-      for (const b of job.bullets) bullet(b);
+      for (const b of job.bullets) innerBullet(b);
       y += gap(1.2);
     }
   }
@@ -138,14 +174,14 @@ function buildDoc(resume: ResumeContent, scale: number): jsPDF {
   if (resume.projects.length > 0) {
     heading("Projects");
     for (const project of resume.projects) {
-      bullet(`${project.name}: ${project.description} (${project.dates})`);
+      outerBullet(`${project.name}: ${project.description} (${project.dates})`);
       y += gap(0.8);
     }
   }
 
   if (resume.honors.length > 0) {
     heading("Honors and Awards");
-    for (const honor of resume.honors) bullet(honor);
+    for (const honor of resume.honors) outerBullet(honor);
   }
 
   return doc;

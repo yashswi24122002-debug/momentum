@@ -119,10 +119,23 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
+  // Contact fields are never the AI's to touch (rewording a link or
+  // reformatting a phone number is not "tailoring") — force them back to
+  // the base profile's exact values rather than trusting the prompt alone.
+  const tailoredResume: ResumeContent = {
+    ...result.tailored_resume,
+    name: baseResume.name,
+    email: baseResume.email,
+    github: baseResume.github,
+    mobile: baseResume.mobile,
+    linkedin: baseResume.linkedin,
+    location: baseResume.location,
+  };
+
   const { data: updated, error: updateError } = await supabase
     .from("job_applications")
     .update({
-      tailored_resume: result.tailored_resume,
+      tailored_resume: tailoredResume,
       cover_letter_text: result.cover_letter,
       status: "tailored",
       updated_at: new Date().toISOString(),
