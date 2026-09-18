@@ -16,6 +16,9 @@ import {
   Soup,
   Settings,
   ShieldCheck,
+  MapPin,
+  Send,
+  Kanban,
   type LucideIcon,
 } from "lucide-react";
 import type { ToolKey } from "@/lib/types/admin";
@@ -105,6 +108,17 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "History", href: "/calories/history", icon: History },
       { label: "Foods", href: "/calories/foods", icon: Soup },
       { label: "Settings", href: "/calories/settings", icon: Settings },
+    ],
+  },
+  {
+    label: "Local Leads",
+    href: "/local-leads",
+    icon: MapPin,
+    toolKey: "local_leads",
+    children: [
+      { label: "Leads", href: "/local-leads", icon: MapPin },
+      { label: "Outreach Queue", href: "/local-leads/outreach-queue", icon: Send },
+      { label: "Pipeline", href: "/local-leads/pipeline", icon: Kanban },
     ],
   },
   {

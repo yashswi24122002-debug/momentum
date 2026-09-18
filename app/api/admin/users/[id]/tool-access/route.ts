@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin-guard";
+import { TOOL_ORDER } from "@/lib/admin/ui";
 import type { ToolKey } from "@/lib/types/admin";
-
-const ALL_TOOLS: ToolKey[] = ["habits", "ideas", "content", "masters_abroad", "jobs", "calories"];
 
 // Body: { tools: { habits: boolean, ideas: boolean, ... } } — bulk-sets all
 // 6 toggles in one call, upserting since a member created before this
@@ -22,7 +21,7 @@ export async function PATCH(
     return NextResponse.json({ error: "tools is required" }, { status: 400 });
   }
 
-  const rows = ALL_TOOLS.filter((t) => t in tools).map((tool_key) => ({
+  const rows = TOOL_ORDER.filter((t) => t in tools).map((tool_key) => ({
     user_id: id,
     tool_key,
     enabled: Boolean(tools[tool_key]),

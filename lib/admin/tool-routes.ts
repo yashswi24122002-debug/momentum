@@ -12,6 +12,7 @@ export const TOOL_ROUTE_PREFIXES: Record<ToolKey, string[]> = {
   masters_abroad: ["/masters-abroad", "/api/universities", "/api/tasks", "/api/documents"],
   jobs: ["/jobs", "/api/job-applications", "/api/resume-profile"],
   calories: ["/calories", "/api/calories"],
+  local_leads: ["/local-leads", "/api/leads", "/api/lead-outreach"],
 };
 
 function matchesPrefix(pathname: string, prefix: string): boolean {

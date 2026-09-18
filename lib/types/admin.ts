@@ -9,7 +9,7 @@ export type Profile = {
   created_at: string;
 };
 
-export type ToolKey = "habits" | "ideas" | "content" | "masters_abroad" | "jobs" | "calories";
+export type ToolKey = "habits" | "ideas" | "content" | "masters_abroad" | "jobs" | "calories" | "local_leads";
 
 export type ToolAccess = {
   id: string;
@@ -25,7 +25,8 @@ export type FeatureKey =
   | "calories_analyse_photo"
   | "calories_fetch_details"
   | "jobs_draft_outreach"
-  | "jobs_tailor_application";
+  | "jobs_tailor_application"
+  | "leads_draft_pitch";
 
 export type UsageLimit = {
   id: string;

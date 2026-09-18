@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateTempPassword } from "@/lib/admin/temp-password";
-import type { ToolKey } from "@/lib/types/admin";
-
-const ALL_TOOLS: ToolKey[] = ["habits", "ideas", "content", "masters_abroad", "jobs", "calories"];
+import { TOOL_ORDER } from "@/lib/admin/ui";
 
 export async function GET() {
   const { supabase, unauthorized } = await requireAdmin();
@@ -59,7 +57,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Every tool starts disabled — the admin turns on what this person should see.
-  await admin.from("tool_access").insert(ALL_TOOLS.map((tool_key) => ({ user_id: created.user.id, tool_key, enabled: false })));
+  await admin.from("tool_access").insert(TOOL_ORDER.map((tool_key) => ({ user_id: created.user.id, tool_key, enabled: false })));
 
   return NextResponse.json({ user: created.user, tempPassword }, { status: 201 });
 }

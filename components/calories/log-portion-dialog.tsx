@@ -14,9 +14,11 @@ import { todayLocalISODate } from "@/lib/date";
 import { fetcher } from "@/lib/swr-fetcher";
 import type { FoodWithServings, MealType, FoodLogWithItems } from "@/lib/types/calories";
 
-type LastLogged = { quantity: number; serving_label: string; serving_g: number } | null;
+type LastLogged = { quantity: number; serving_label: string; serving_g: number; meal_type: MealType | null } | null;
+type LastLoggedResponse = { last: LastLogged; recentGrams: number[] };
 
 const CUSTOM_GRAMS = "__grams__";
+const GRAMS_PREFIX = "grams:";
 
 export function LogPortionDialog({
   open,
@@ -39,12 +41,11 @@ export function LogPortionDialog({
   const [saving, setSaving] = useState(false);
 
   // Defaults to whatever this user last logged for this exact food (e.g.
-  // "250g" for banana shake every time) instead of the catalogue's generic
-  // serving size — only needs to apply once per food selection (the parent
-  // remounts this dialog via `key={food.id}` on each new selection, so this
-  // naturally resets per food rather than needing to track "which food
-  // this was for").
-  const { data: lastLoggedData } = useSWR<{ last: LastLogged }>(
+  // "250g" for banana shake every time, in the meal it's usually logged
+  // under) instead of generic defaults — only needs to apply once per
+  // food selection (the parent remounts this dialog via `key={food.id}`
+  // on each new selection, so this naturally resets per food).
+  const { data: lastLoggedData } = useSWR<LastLoggedResponse>(
     food ? `/api/calories/foods/${food.id}/last-logged` : null,
     fetcher
   );
@@ -53,17 +54,33 @@ export function LogPortionDialog({
     setAppliedLastLogged(true);
     const last = lastLoggedData.last;
     setQuantity(String(last.quantity));
+    if (last.meal_type) setMealType(last.meal_type);
     const matchedServing = servings.find((s) => s.label === last.serving_label);
     if (matchedServing) {
       setServingChoice(matchedServing.label);
     } else {
-      setServingChoice(CUSTOM_GRAMS);
+      setServingChoice(`${GRAMS_PREFIX}${last.serving_g}`);
       setGrams(String(last.serving_g));
     }
   }
 
-  const servingG = servingChoice === CUSTOM_GRAMS ? Number(grams) || 0 : servings.find((s) => s.label === servingChoice)?.grams ?? 0;
-  const servingLabel = servingChoice === CUSTOM_GRAMS ? "g" : servingChoice;
+  // Every gram amount worth offering as a one-tap pick: the catalogue's
+  // own default (labelled so, since it's not something the user chose
+  // themselves) plus whatever distinct amounts this user has actually
+  // logged for this food before — e.g. logged 70g once and 100g another
+  // time, both show up here alongside the 150g default and Custom.
+  const gramOptions = new Map<number, string>();
+  if (food?.default_serving_g) gramOptions.set(food.default_serving_g, `${food.default_serving_g}g (default)`);
+  for (const g of lastLoggedData?.recentGrams ?? []) {
+    if (!gramOptions.has(g)) gramOptions.set(g, `${g}g`);
+  }
+
+  const servingG = servingChoice.startsWith(GRAMS_PREFIX)
+    ? Number(servingChoice.slice(GRAMS_PREFIX.length)) || 0
+    : servingChoice === CUSTOM_GRAMS
+      ? Number(grams) || 0
+      : servings.find((s) => s.label === servingChoice)?.grams ?? 0;
+  const servingLabel = servingChoice.startsWith(GRAMS_PREFIX) || servingChoice === CUSTOM_GRAMS ? "g" : servingChoice;
   const qty = Number(quantity) || 0;
 
   const preview = food ? scaleNutrition(food, servingG * qty) : { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
@@ -130,6 +147,11 @@ export function LogPortionDialog({
                   {servings.map((s) => (
                     <SelectItem key={s.id} value={s.label}>
                       {s.label} ({s.grams}g)
+                    </SelectItem>
+                  ))}
+                  {[...gramOptions.entries()].map(([g, label]) => (
+                    <SelectItem key={g} value={`${GRAMS_PREFIX}${g}`}>
+                      {label}
                     </SelectItem>
                   ))}
                   <SelectItem value={CUSTOM_GRAMS}>Custom grams</SelectItem>
