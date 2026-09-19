@@ -10,46 +10,57 @@ import type { ResumeContent } from "@/lib/types/resume";
 
 export type OutreachMode = "referral" | "hiring_team";
 
-// Fixed wording for the ask — a declarative statement, never a question
-// ("Would you be open to...?" reads weaker and was explicitly rejected in
-// favor of this phrasing). Kept out of the model's hands entirely, same
-// reasoning as the greeting/sign-off: exact wording that matters isn't
-// left to chance.
-const ASK_TEXT: Record<OutreachMode, string> = {
-  referral:
-    "I would greatly appreciate a referral for the role, or, if appropriate, being directed to the relevant person on the team who I could connect with regarding the opportunity.",
-  hiring_team:
-    "I would greatly appreciate the opportunity to be considered for this role, and would be happy to share more information or discuss further at your convenience.",
-};
+// Referral and hiring_team are genuinely different emails, not one skeleton
+// with a swapped sentence — each mode's mechanical wording below (opening,
+// closing, sign-off) is composed in code and never left to the model, so the
+// approved format is guaranteed every time. Referral mode is warm/personal
+// and needs no skills pitch; hiring_team mode needs labeled bullets tying
+// the resume to the JD. Kept as separate schemas/prompts per mode.
 
-// The AI only ever writes the role mention + skills-match bullets —
-// greeting, thanks line, sign-off, and the ask are all composed below
-// instead of trusted to the model, so the approved format (Hi X, / role
-// mention / skills as actual bullet points / fixed non-question ask /
-// thank you for your consideration / Regards, name, phone) is guaranteed
-// every single time, not just usually.
-const DraftSchema = z.object({
-  subject: z.string().describe("A short, specific email subject line — not generic ('Application for X role' is too generic; reference the actual company/role)."),
-  role_mention: z
+const SubjectField = z
+  .string()
+  .describe("A short, specific email subject line — not generic ('Application for X role' is too generic; reference the actual company/role).");
+
+const ReferralSchema = z.object({
+  subject: SubjectField,
+  connection_line: z
     .string()
     .describe(
-      "1-2 sentences, plain prose (not a list), on the specific role and what about it caught your attention. No greeting, no sign-off."
-    ),
-  skills_match: z
-    .array(z.string())
-    .min(2)
-    .max(4)
-    .describe(
-      "2-4 short bullet points (each item is ONE bullet, one sentence, not a paragraph), each connecting one concrete skill/technology/experience from the resume to something specific the job description actually asks for. Infer from the job description — don't invent skills that don't fit."
+      "ONE short, natural sentence explaining why you're reaching out to this specific person, based on the connection context given. Do not restate the role or company name — that's already said elsewhere. Return an empty string if no connection context was given."
     ),
 });
 
-function buildPrompt(
+const HiringTeamSchema = z.object({
+  subject: SubjectField,
+  bullets: z
+    .array(
+      z.object({
+        label: z.string().describe("A short 1-3 word Title Case label for this bullet, e.g. 'Alignment', 'Frontend & State', 'Backend & Delivery'."),
+        text: z.string().describe("One sentence following the label."),
+      })
+    )
+    .min(2)
+    .max(4)
+    .describe(
+      "2-4 labeled bullets. The FIRST bullet should be labeled 'Alignment' and connect something specific about the company's actual product/work (from the job description) to my focus area. The remaining bullets should each connect one concrete skill/technology/experience from my resume to something specific the job description actually asks for — don't invent skills that don't fit."
+    ),
+});
+
+function buildReferralPrompt(
+  application: { company: string; role_title: string },
+  connectionContext: string
+): string {
+  return `I'm about to send a referral-request email to someone at ${application.company} about their "${application.role_title}" role. Write a short, specific subject line, and one natural sentence (connection_line) explaining why I'm reaching out to them specifically, based on this context: "${connectionContext}".
+
+Tone: warm, genuine, like reaching out to a real acquaintance — not salesy. Keep the sentence short (it slots into a longer email, not standalone). Don't restate the role or company name in the sentence.`;
+}
+
+function buildHiringTeamPrompt(
   application: { company: string; role_title: string; jd_text: string },
   resume: ResumeContent | null
 ): string {
   const topSkills = resume?.skills.flatMap((s) => s.items).slice(0, 8).join(", ");
-  return `Write two things for a short, genuine cold-outreach email about ${application.company}'s "${application.role_title}" role: (1) a brief role_mention, and (2) 2-4 skills_match bullets.
+  return `Write a subject line and 2-4 labeled bullets for a short, genuine cold-outreach email about ${application.company}'s "${application.role_title}" role.
 
 Tone: direct, confident, not desperate, not overly formal.${
     topSkills ? ` My actual skills include: ${topSkills}.` : ""
@@ -79,11 +90,12 @@ export async function POST(
 
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
-  const { contact_email, contact_first_name, contact_last_name, outreach_mode } = body as {
+  const { contact_email, contact_first_name, contact_last_name, outreach_mode, connection_context } = body as {
     contact_email?: string;
     contact_first_name?: string | null;
     contact_last_name?: string | null;
     outreach_mode?: OutreachMode;
+    connection_context?: string | null;
   };
 
   // Contact-finding (Hunter.io) was removed — the user always enters the
@@ -108,10 +120,31 @@ export async function POST(
   const finalContactName = [contact_first_name, contact_last_name].filter(Boolean).join(" ") || null;
 
   const resume = (application.tailored_resume as ResumeContent | null) ?? null;
+  const greeting = contact_first_name ? `Hi ${contact_first_name},` : "Hi team,";
 
-  let draft: z.infer<typeof DraftSchema>;
+  let subject: string;
+  let fullBody: string;
   try {
-    draft = await generateContentAsUser(user.id, isAdmin, buildPrompt(application, resume), DraftSchema);
+    if (mode === "referral") {
+      const context = connection_context?.trim() ?? "";
+      const draft = await generateContentAsUser(user.id, isAdmin, buildReferralPrompt(application, context), ReferralSchema);
+      subject = draft.subject;
+      const connectionSentence = draft.connection_line.trim() ? ` ${draft.connection_line.trim()}` : "";
+      const opening = `I recently came across the ${application.role_title} opportunity at ${application.company} and wanted to reach out regarding the role.${connectionSentence}`;
+      const interestAsk =
+        "I'm very interested in exploring this opportunity and have attached my resume for your reference. I would really appreciate it if you could take a look at my profile and consider me for the role if you find my experience relevant.";
+      const closing = "Thank you for your time and consideration. I look forward to hearing from you.";
+      fullBody = `${greeting}\n\nI hope you're doing well.\n\n${opening}\n\n${interestAsk}\n\n${closing}\n\nBest regards,\n${resume?.name ?? ""}`;
+    } else {
+      const draft = await generateContentAsUser(user.id, isAdmin, buildHiringTeamPrompt(application, resume), HiringTeamSchema);
+      subject = draft.subject;
+      const opening = `I am reaching out to express my strong interest in the ${application.role_title} role at ${application.company}, having recently learned about the opportunity.`;
+      const bulletLines = draft.bullets.map((b) => `- ${b.label}: ${b.text}`).join("\n");
+      const closing =
+        "My resume is attached for your review. I look forward to the opportunity to connect and discuss how I can add value to your team.";
+      const signoffLines = [resume?.name, resume?.mobile].filter(Boolean).join("\n");
+      fullBody = `${greeting}\n\n${opening}\n\n${bulletLines}\n\n${closing}\n\nBest regards,\n${signoffLines}`;
+    }
   } catch (error) {
     await logError(supabase, "job-applications/draft-outreach", error instanceof Error ? error.message : String(error), { applicationId: id });
     const message =
@@ -121,20 +154,12 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  // The approved format's mechanical parts — never left to the model.
-  const greeting = contact_first_name ? `Hi ${contact_first_name},` : "Hi team,";
-  const skillsBullets = draft.skills_match.map((s) => `- ${s}`).join("\n");
-  const attachmentLine = "I've attached my resume and a tailored cover letter for a closer look at my work.";
-  const closingLine = "Thank you so much for your time and consideration.";
-  const signoffLines = [resume?.name, resume?.mobile].filter(Boolean).join("\n");
-  const fullBody = `${greeting}\n\n${draft.role_mention.trim()}\n\n${skillsBullets}\n\n${attachmentLine} ${ASK_TEXT[mode]}\n\n${closingLine}\n\nRegards,\n${signoffLines}`;
-
   const { data: updated, error: updateError } = await supabase
     .from("job_applications")
     .update({
       contact_email: finalContactEmail,
       contact_name: finalContactName,
-      email_subject: draft.subject,
+      email_subject: subject,
       email_body_draft: fullBody,
       status: "contact_found",
       updated_at: new Date().toISOString(),

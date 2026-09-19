@@ -29,6 +29,7 @@ export function ApplicationDetail({ id }: { id: string }) {
   const [contactEmail, setContactEmail] = useState("");
   const [contactName, setContactName] = useState("");
   const [outreachMode, setOutreachMode] = useState<OutreachMode>("hiring_team");
+  const [connectionContext, setConnectionContext] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [emailDraft, setEmailDraft] = useState<{ contact_email: string; subject: string; body: string } | null>(null);
   const [sending, setSending] = useState(false);
@@ -104,6 +105,7 @@ export function ApplicationDetail({ id }: { id: string }) {
         contact_first_name: firstName ?? null,
         contact_last_name: restName.join(" ") || null,
         outreach_mode: outreachMode,
+        connection_context: outreachMode === "referral" ? connectionContext.trim() || null : null,
       }),
     });
     setDrafting(false);
@@ -298,6 +300,16 @@ export function ApplicationDetail({ id }: { id: string }) {
                 </Button>
               </div>
             </div>
+            {outreachMode === "referral" && (
+              <div className="space-y-1.5">
+                <Label>How do you know them? (optional)</Label>
+                <Input
+                  value={connectionContext}
+                  onChange={(e) => setConnectionContext(e.target.value)}
+                  placeholder="e.g. same college, worked together at X, connected on LinkedIn"
+                />
+              </div>
+            )}
             <Button size="sm" onClick={draftOutreach} disabled={drafting || !contactEmail.trim()}>
               {drafting ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
               {drafting ? "Drafting…" : "Draft outreach email"}
