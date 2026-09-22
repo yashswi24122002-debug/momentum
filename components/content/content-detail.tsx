@@ -141,7 +141,7 @@ export function ContentDetail({ ideaId }: { ideaId: string }) {
               {idea.matched_media.map((m) => (
                 <div key={m.id} className="relative aspect-square overflow-hidden rounded-lg bg-surface-hover">
                   {m.signed_url && (
-                    <Image src={m.signed_url} alt={m.location_name ?? "Matched photo"} fill className="object-cover" unoptimized />
+                    <Image src={m.signed_url} alt={m.location_name ?? "Matched photo"} fill className="object-cover" />
                   )}
                 </div>
               ))}

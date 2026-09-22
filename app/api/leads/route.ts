@@ -18,9 +18,13 @@ export async function GET(request: NextRequest) {
   if (hasWebsite === "true") query = query.not("existing_website", "is", null);
   if (hasWebsite === "false") query = query.is("existing_website", null);
 
+  // Capped rather than fully paginated for now — generous enough for
+  // realistic use, but keeps this from becoming an unbounded full-table
+  // fetch as leads accumulate over months of repeated discovery runs.
   const { data, error } = await query
     .order("existing_website", { ascending: true, nullsFirst: true })
-    .order("google_rating", { ascending: false, nullsFirst: false });
+    .order("google_rating", { ascending: false, nullsFirst: false })
+    .limit(500);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -41,20 +41,25 @@ export function LeadList() {
       return;
     }
     setDiscovering(true);
-    const res = await fetch("/api/leads/discover", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ area, area_label: customArea || null, category: category || null }),
-    });
-    setDiscovering(false);
-    if (!res.ok) {
-      const { error } = await res.json().catch(() => ({ error: "Couldn't find leads — try again." }));
-      toast.error(error);
-      return;
+    try {
+      const res = await fetch("/api/leads/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ area, area_label: customArea || null, category: category || null }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "Couldn't find leads — try again." }));
+        toast.error(error);
+        return;
+      }
+      const { fetched, inserted } = await res.json();
+      mutate();
+      toast.success(`Found ${fetched} businesses — ${inserted} new lead${inserted === 1 ? "" : "s"} added.`);
+    } catch {
+      toast.error("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setDiscovering(false);
     }
-    const { fetched, inserted } = await res.json();
-    mutate();
-    toast.success(`Found ${fetched} businesses — ${inserted} new lead${inserted === 1 ? "" : "s"} added.`);
   }
 
   async function saveEmail(lead: BusinessLead) {
@@ -75,28 +80,38 @@ export function LeadList() {
 
   async function draftPitch(lead: BusinessLead) {
     setDrafting(lead.id);
-    const res = await fetch(`/api/leads/${lead.id}/draft-pitch`, { method: "POST" });
-    setDrafting(null);
-    if (!res.ok) {
-      const { error } = await res.json().catch(() => ({ error: "Couldn't draft that — try again." }));
-      toast.error(error);
-      return;
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/draft-pitch`, { method: "POST" });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "Couldn't draft that — try again." }));
+        toast.error(error);
+        return;
+      }
+      toast.success("Drafted — review it in the Outreach Queue.");
+    } catch {
+      toast.error("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setDrafting(null);
     }
-    toast.success("Drafted — review it in the Outreach Queue.");
   }
 
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
-    const res = await fetch(`/api/leads/${deleteTarget.id}`, { method: "DELETE" });
-    setDeleting(false);
-    if (!res.ok) {
-      toast.error("Couldn't delete that — try again.");
-      return;
+    try {
+      const res = await fetch(`/api/leads/${deleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("Couldn't delete that — try again.");
+        return;
+      }
+      mutate((prev) => prev && { leads: prev.leads.filter((l) => l.id !== deleteTarget.id) }, { revalidate: false });
+      setDeleteTarget(null);
+      toast.success("Deleted.");
+    } catch {
+      toast.error("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setDeleting(false);
     }
-    mutate((prev) => prev && { leads: prev.leads.filter((l) => l.id !== deleteTarget.id) }, { revalidate: false });
-    setDeleteTarget(null);
-    toast.success("Deleted.");
   }
 
   return (

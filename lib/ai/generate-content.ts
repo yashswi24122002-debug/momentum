@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { resolveGeminiApiKey } from "@/lib/admin/resolve-api-key";
-import { getFallbackMemberKeys, nextFallbackIndex } from "@/lib/ai/fallback-keys";
+import { getFallbackMemberKeys, nextFallbackIndex, checkFallbackRateLimit } from "@/lib/ai/fallback-keys";
 
 // Master PRD §3/§5: one function all Gemini calls go through, so the
 // provider is swappable later. The PRD specifies gemini-2.5-flash, but
@@ -100,6 +100,11 @@ export async function generateContentAsUser<T>(
 
     const pool = await getFallbackMemberKeys();
     if (pool.length === 0) throw error;
+
+    // Bounds how many times this path can fire in a short burst (stuck
+    // retry loop, rapid clicking) — over the cap, surface the original
+    // quota error instead of cascading through every member's key.
+    if (!(await checkFallbackRateLimit())) throw error;
 
     for (let i = 0; i < pool.length; i++) {
       const idx = await nextFallbackIndex(pool.length);

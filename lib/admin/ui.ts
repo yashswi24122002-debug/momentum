@@ -20,6 +20,7 @@ export const FEATURE_ORDER: FeatureKey[] = [
   "jobs_tailor_application",
   "jobs_draft_outreach",
   "leads_draft_pitch",
+  "leads_discover",
 ];
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
   ideas_generate: "Generate ideas",
@@ -30,4 +31,5 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   jobs_tailor_application: "Tailor resume + cover letter",
   jobs_draft_outreach: "Draft outreach emails",
   leads_draft_pitch: "Draft lead pitch emails",
+  leads_discover: "Discover local businesses (Google Places)",
 };

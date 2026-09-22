@@ -26,7 +26,8 @@ export type FeatureKey =
   | "calories_fetch_details"
   | "jobs_draft_outreach"
   | "jobs_tailor_application"
-  | "leads_draft_pitch";
+  | "leads_draft_pitch"
+  | "leads_discover";
 
 export type UsageLimit = {
   id: string;

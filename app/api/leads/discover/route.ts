@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
+import { checkIsAdmin } from "@/lib/supabase/admin-guard";
+import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
 import { searchLocalBusinesses } from "@/lib/integrations/google-places";
 import { logError } from "@/lib/errors/log-error";
 import type { LeadArea } from "@/lib/types/leads";
@@ -9,6 +11,18 @@ const VALID_AREAS: LeadArea[] = ["noida", "ghaziabad", "greater_noida", "other"]
 export async function POST(request: NextRequest) {
   const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
+
+  // Each call here is a real, billed Google Places request — this is the
+  // one external-cost route in the app that was missing this gate.
+  const isAdmin = await checkIsAdmin(supabase, user);
+  try {
+    await checkAndIncrementUsage(supabase, user.id, "leads_discover", isAdmin);
+  } catch (error) {
+    if (error instanceof UsageLimitExceededError) {
+      return NextResponse.json({ error: error.message }, { status: 429 });
+    }
+    throw error;
+  }
 
   const body = await request.json().catch(() => ({}));
   const { area, area_label, category } = body as { area?: string; area_label?: string; category?: string | null };

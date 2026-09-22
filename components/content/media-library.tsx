@@ -100,7 +100,7 @@ export function MediaLibrary() {
               className="group relative aspect-square overflow-hidden rounded-lg bg-surface-hover"
             >
               {m.signed_url && (
-                <Image src={m.signed_url} alt={m.location_name ?? "Photo"} fill className="object-cover" unoptimized />
+                <Image src={m.signed_url} alt={m.location_name ?? "Photo"} fill className="object-cover" />
               )}
               {m.content_worthy && (
                 <span className="absolute top-1 right-1 rounded-full bg-background/80 p-1">

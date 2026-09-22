@@ -28,3 +28,23 @@ export async function nextFallbackIndex(poolSize: number): Promise<number> {
   if (error || typeof data !== "number") return 0;
   return data;
 }
+
+const FALLBACK_MAX_PER_WINDOW = 10;
+const FALLBACK_WINDOW_SECONDS = 60;
+
+/**
+ * Caps how often the fallback path itself can fire in a rolling window —
+ * separate from per-feature usage_limits, which only cap a member's own
+ * counted actions, not "how many times someone else's key got borrowed."
+ * Fails closed (blocks fallback) if the check itself errors, since the
+ * whole point is bounding worst-case member-quota consumption.
+ */
+export async function checkFallbackRateLimit(): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("check_fallback_rate_limit", {
+    p_max_per_window: FALLBACK_MAX_PER_WINDOW,
+    p_window_seconds: FALLBACK_WINDOW_SECONDS,
+  });
+  if (error) return false;
+  return data === true;
+}
