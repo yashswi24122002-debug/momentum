@@ -12,7 +12,7 @@ export type Habit = {
   color: string | null;
   /** "HH:MM:SS" (Postgres time), local IST — null means no reminder set. */
   reminder_time: string | null;
-  /** "checkin" fires unconditionally with Yes/No actions; "nudge" only fires if not yet completed that day. */
+  /** Both skip an already-completed day — "checkin" asks "are you X?" with Yes/No actions, "nudge" just says it's time. */
   reminder_style: "checkin" | "nudge" | null;
   reminder_sent_on: string | null;
 };

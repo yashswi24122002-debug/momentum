@@ -72,7 +72,11 @@ export async function GET(request: NextRequest) {
       .eq("date", date)
       .maybeSingle();
 
-    const shouldSend = log?.excused ? false : habit.reminder_style === "checkin" ? true : !log?.completed;
+    // Both styles skip an already-completed day — the difference is only
+    // the wording/Yes-No actions, not whether it fires (checkin used to
+    // fire unconditionally, which meant re-asking "are you gym?" after
+    // you'd already marked it done).
+    const shouldSend = log?.excused ? false : !log?.completed;
 
     if (shouldSend) {
       const { data: subs } = await supabase
