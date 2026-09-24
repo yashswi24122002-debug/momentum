@@ -285,11 +285,11 @@ export function HabitGrid() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="leave-from">From</Label>
-                <Input id="leave-from" type="date" value={leaveFrom} max={today} onChange={(e) => setLeaveFrom(e.target.value)} />
+                <Input id="leave-from" type="date" value={leaveFrom} onChange={(e) => setLeaveFrom(e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="leave-to">To</Label>
-                <Input id="leave-to" type="date" value={leaveTo} max={today} onChange={(e) => setLeaveTo(e.target.value)} />
+                <Input id="leave-to" type="date" value={leaveTo} onChange={(e) => setLeaveTo(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">

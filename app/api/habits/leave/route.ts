@@ -33,9 +33,6 @@ export async function POST(request: NextRequest) {
   if (dateTo < date_from) {
     return NextResponse.json({ error: "date_to must be on or after date_from" }, { status: 400 });
   }
-  if (dateTo > todayLocalISODate()) {
-    return NextResponse.json({ error: "Can't mark a future date as leave" }, { status: 400 });
-  }
 
   const rangeDays = Math.round((new Date(dateTo).getTime() - new Date(date_from).getTime()) / 86_400_000) + 1;
   if (rangeDays > MAX_RANGE_DAYS) {
