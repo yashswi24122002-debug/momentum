@@ -35,6 +35,13 @@ import {
 } from "@/lib/habits/stats";
 import type { Habit, HabitLog } from "@/lib/types/habits";
 
+type LeaveData = {
+  month: string;
+  cap: number;
+  usage: { habit_id: string; count: number }[];
+  history: { month: string; days: number }[];
+};
+
 const CHART_COLORS = { primary: "#10b981", muted: "#232b29", info: "#38bdf8" };
 const PALETTE = ["#10b981", "#38bdf8", "#f59e0b", "#ef4444", "#34d399", "#0ea5e9"];
 const AXIS_TICK = { fontSize: 10, fill: "#6b7674" };
@@ -64,6 +71,12 @@ export function HabitDashboard({
 
   const habits = skipFetch ? preloadedHabits! : (habitsData?.habits ?? null);
   const logs = skipFetch ? preloadedLogs! : (logsData?.logs ?? null);
+
+  // Leave quota is a "your own cap" concept — skipped entirely in the
+  // admin's read-only member-preview mode (skipFetch), same as that view
+  // already only shows simplified summaries for other tools rather than
+  // full parity with the self-view dashboard.
+  const { data: leaveData } = useSWR<LeaveData>(skipFetch ? null : "/api/habits/leave?history=1", fetcher);
 
   const trend = useMemo(
     () => (habits && logs ? weeklyCompletionTrend(habits, logs, today) : []),
@@ -318,7 +331,71 @@ export function HabitDashboard({
           />
         </CardContent>
       </Card>
+
+      {leaveData && <LeaveSection habits={habits} leaveData={leaveData} />}
     </div>
+  );
+}
+
+// Leave days don't count against completion %/streaks anywhere in the app
+// already (lib/habits/stats.ts's isExpected skips them) — this section
+// just makes that visible, not a separate "what if" calculation.
+function LeaveSection({ habits, leaveData }: { habits: Habit[]; leaveData: LeaveData }) {
+  const usedByHabit = new Map(leaveData.usage.map((u) => [u.habit_id, u.count]));
+  const totalDaysThisMonth = leaveData.history.find((h) => h.month === leaveData.month)?.days ?? 0;
+  const totalDays6mo = leaveData.history.reduce((s, h) => s + h.days, 0);
+  const atCap = habits.filter((h) => (usedByHabit.get(h.id) ?? 0) >= leaveData.cap).length;
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <StatCard label="Leave days (this month)" value={String(totalDaysThisMonth)} />
+        <StatCard label="Leave days (6 months)" value={String(totalDays6mo)} />
+        <StatCard label="Habits at their cap" value={String(atCap)} />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-sm text-text-secondary">Leave remaining this month</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {habits.map((h) => {
+              const used = usedByHabit.get(h.id) ?? 0;
+              const remaining = Math.max(leaveData.cap - used, 0);
+              return (
+                <div key={h.id} className="flex items-center justify-between rounded-lg bg-background px-3 py-2">
+                  <span className="truncate text-sm text-text-primary">{h.name}</span>
+                  <span className="shrink-0 text-xs text-text-muted">
+                    {used}/{leaveData.cap} used · {remaining} left
+                  </span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-sm text-text-secondary">Leave days taken (6 months)</CardTitle>
+          </CardHeader>
+          <CardContent className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={leaveData.history}>
+                <CartesianGrid stroke={CHART_COLORS.muted} vertical={false} />
+                <XAxis dataKey="month" tick={AXIS_TICK} />
+                <YAxis allowDecimals={false} tick={AXIS_TICK} width={30} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_TEXT_STYLE} labelStyle={TOOLTIP_TEXT_STYLE} formatter={(v) => [`${v} day${v === 1 ? "" : "s"}`, "Leave"]} />
+                <Bar dataKey="days" fill={CHART_COLORS.info} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+          <p className="px-6 pb-4 text-[11px] text-text-muted">
+            Leave days don&apos;t count against your completion % or streaks.
+          </p>
+        </Card>
+      </div>
+    </>
   );
 }
 

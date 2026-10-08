@@ -1,9 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
-import { addDays, todayLocalISODate } from "@/lib/date";
+import { addDays, lastNMonths, todayLocalISODate } from "@/lib/date";
 
 const MAX_RANGE_DAYS = 90;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const HISTORY_MONTHS = 6;
+
+// Last HISTORY_MONTHS months of leave days taken, for the history page's
+// trend chart — calorie leave has no cap (unlike habits), so this is pure
+// history, not a quota/remaining count.
+export async function GET() {
+  const { supabase, user, unauthorized } = await requireUser();
+  if (unauthorized) return unauthorized;
+
+  const months = lastNMonths(HISTORY_MONTHS);
+  const since = `${months[0]}-01`;
+
+  const { data, error } = await supabase.from("calorie_leave_days").select("date").eq("user_id", user.id).gte("date", since);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const daysByMonth = new Map(months.map((m) => [m, 0]));
+  for (const row of data ?? []) {
+    const m = (row.date as string).slice(0, 7);
+    if (daysByMonth.has(m)) daysByMonth.set(m, daysByMonth.get(m)! + 1);
+  }
+
+  return NextResponse.json({ history: months.map((m) => ({ month: m, days: daysByMonth.get(m)! })) });
+}
 
 // Marks a date range as "on leave" for calorie tracking — same shape as
 // the habit-leave endpoint, so history/dashboard reads can treat these

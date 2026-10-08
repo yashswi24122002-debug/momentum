@@ -107,6 +107,10 @@ export function HistoryPage() {
     `/api/calories/history?days=${days}&to=${todayLocalISODate()}`,
     fetcher
   );
+  // Calorie leave has no cap (unlike habits) — this is pure history, not a
+  // quota/remaining count, so it's a separate fetch from the range above
+  // rather than something the range selector should affect.
+  const { data: leaveData } = useSWR<{ history: { month: string; days: number }[] }>("/api/calories/leave", fetcher);
 
   if (data === undefined) {
     return (
@@ -221,6 +225,26 @@ export function HistoryPage() {
           </div>
         </CardContent>
       </Card>
+
+      {leaveData && (
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-sm text-text-secondary">Leave days taken (6 months)</CardTitle>
+          </CardHeader>
+          <CardContent className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={leaveData.history}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#232b29" />
+                <XAxis dataKey="month" tick={AXIS_TICK} />
+                <YAxis allowDecimals={false} tick={AXIS_TICK} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "#e5e9e7" }} labelStyle={{ color: "#e5e9e7" }} formatter={(v) => [`${v} day${v === 1 ? "" : "s"}`, "Leave"]} />
+                <Bar dataKey="days" fill={CHART_COLORS.goal} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+          <p className="px-6 pb-4 text-[11px] text-text-muted">Leave days are excluded from adherence stats above.</p>
+        </Card>
+      )}
 
       <Card className="border-border bg-surface">
         <CardHeader>

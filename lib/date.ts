@@ -40,3 +40,13 @@ export function addDays(iso: string, days: number): string {
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
+
+/** Last `n` months as "YYYY-MM" strings, oldest first, ending with the current month. */
+export function lastNMonths(n: number, from: Date = new Date()): string[] {
+  const months: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(from.getFullYear(), from.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return months;
+}

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { isScheduledOn } from "@/lib/habits/schedule";
-import { addDays, todayLocalISODate } from "@/lib/date";
+import { addDays, lastNMonths, todayLocalISODate } from "@/lib/date";
 
 const MAX_RANGE_DAYS = 90;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const HISTORY_MONTHS = 6;
 
 // Each habit gets a limited number of leave *uses* per calendar month, not
 // a limited number of leave *days* — one bulk date-range submission below
@@ -128,9 +129,18 @@ export async function POST(request: NextRequest) {
 // endpoint rather than joined into GET /api/habits, which is on the hot
 // path for every habit page (checklist, grid, dashboard) and shouldn't
 // carry a query only the Manage tab needs.
-export async function GET() {
+//
+// ?history=1 additionally returns the last HISTORY_MONTHS months of
+// distinct leave *days* taken (for the dashboard's trend chart) — counted
+// from habit_logs directly, not habit_leave_usage, since that table
+// tracks capped *uses* (one bulk range = 1 use, however many days it
+// spans), not the actual day count the trend chart wants to show.
+export async function GET(request: NextRequest) {
   const { supabase, user, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
+
+  const { searchParams } = new URL(request.url);
+  const wantsHistory = searchParams.get("history") === "1";
 
   const month = todayLocalISODate().slice(0, 7);
   const { data, error } = await supabase
@@ -143,5 +153,32 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ month, cap: MONTHLY_CAP, usage: data });
+  if (!wantsHistory) {
+    return NextResponse.json({ month, cap: MONTHLY_CAP, usage: data });
+  }
+
+  const months = lastNMonths(HISTORY_MONTHS);
+  const since = `${months[0]}-01`;
+
+  const { data: userHabits } = await supabase.from("habits").select("id").eq("user_id", user.id);
+  const habitIds = (userHabits ?? []).map((h) => h.id);
+
+  const daysByMonth = new Map(months.map((m) => [m, new Set<string>()]));
+  if (habitIds.length > 0) {
+    const { data: excusedLogs } = await supabase
+      .from("habit_logs")
+      .select("date")
+      .in("habit_id", habitIds)
+      .eq("excused", true)
+      .gte("date", since);
+
+    for (const log of excusedLogs ?? []) {
+      const m = (log.date as string).slice(0, 7);
+      daysByMonth.get(m)?.add(log.date as string);
+    }
+  }
+
+  const history = months.map((m) => ({ month: m, days: daysByMonth.get(m)?.size ?? 0 }));
+
+  return NextResponse.json({ month, cap: MONTHLY_CAP, usage: data, history });
 }
