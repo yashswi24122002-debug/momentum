@@ -136,6 +136,13 @@ export function WebsiteAuditDialog({
           </div>
         ) : (
           <div className="space-y-4">
+            {audit.error && (
+              <p className="flex items-start gap-1.5 rounded-lg bg-warning/10 p-2.5 text-xs text-warning">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                Some checks couldn&apos;t complete: {audit.error}
+              </p>
+            )}
+
             {screenshotUrl && (
               // eslint-disable-next-line @next/next/no-img-element -- a signed, short-lived storage URL isn't worth next/image's remote-pattern config for one thumbnail
               <img src={screenshotUrl} alt="Website screenshot" className="max-h-48 rounded-lg border border-border object-contain" />

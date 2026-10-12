@@ -62,8 +62,13 @@ export async function runPageSpeedCheck(url: string): Promise<{ result: PageSpee
     // explicitly asked for via FIELDS — asking for everything instead is
     // simpler and the response is still well within normal payload sizes.
 
+    // Left well short of the route's 60s maxDuration — this call runs
+    // alongside the HTML scan, but the route still needs time afterward
+    // for the Gemini summary call and the DB write, so this can't eat the
+    // whole budget even though PSI itself (a real mobile-throttled page
+    // load) can take 30-40s+ against a slow site.
     const response = await fetch(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params}`, {
-      signal: AbortSignal.timeout(50_000),
+      signal: AbortSignal.timeout(40_000),
     });
 
     if (!response.ok) {
@@ -125,6 +130,14 @@ export async function runPageSpeedCheck(url: string): Promise<{ result: PageSpee
 
     return { result: { scores, vitals, issues, screenshotBase64: screenshotBase64 ?? null } };
   } catch (error) {
-    return { result: null, error: error instanceof Error ? error.message : String(error) };
+    const isTimeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    return {
+      result: null,
+      error: isTimeout
+        ? "This site took too long to load for PageSpeed Insights to finish checking it"
+        : error instanceof Error
+          ? error.message
+          : String(error),
+    };
   }
 }

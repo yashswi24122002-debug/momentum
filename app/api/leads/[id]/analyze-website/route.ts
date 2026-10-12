@@ -79,9 +79,20 @@ export async function POST(
     scanWebsite(lead.existing_website),
   ]);
 
+  // Every failure gets logged, even a partial one (e.g. the HTML scan
+  // succeeding while PageSpeed times out) — previously only the "both
+  // failed" case was recorded anywhere, so a partial failure silently
+  // produced a near-empty report with no visible explanation.
+  const partialErrors = [
+    pagespeedError ? `PageSpeed Insights: ${pagespeedError}` : null,
+    scanError ? `Page scan: ${scanError}` : null,
+  ].filter((e): e is string => e !== null);
+  if (partialErrors.length > 0) {
+    await logError(supabase, "leads/analyze-website", partialErrors.join(" | "), { leadId: id, url: lead.existing_website });
+  }
+
   if (!pagespeed && !scan) {
-    const combinedError = [pagespeedError, scanError].filter(Boolean).join("; ");
-    await logError(supabase, "leads/analyze-website", combinedError, { leadId: id, url: lead.existing_website });
+    const combinedError = partialErrors.join("; ");
     const { data: failed } = await supabase
       .from("website_audits")
       .insert({
@@ -145,6 +156,10 @@ export async function POST(
           }
         : null,
       ai_summary: aiSummary,
+      // Reused even on a "completed" row — a note on what couldn't be
+      // checked, not just a failure-status field, so the report can say
+      // *why* a section is missing instead of just omitting it silently.
+      error: partialErrors.length > 0 ? partialErrors.join(" | ") : null,
       completed_at: new Date().toISOString(),
     })
     .select()
