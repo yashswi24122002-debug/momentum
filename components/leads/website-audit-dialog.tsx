@@ -163,24 +163,31 @@ export function WebsiteAuditDialog({
 
             {audit.meta && (
               <div className="grid grid-cols-2 gap-1.5 text-xs text-text-muted sm:grid-cols-3">
-                <span>Viewport: {audit.meta.has_viewport ? "✓" : "✗"}</span>
-                <span>HTTPS: {audit.meta.https_valid ? "✓" : "✗"}</span>
-                <span>Sitemap: {audit.meta.has_sitemap ? "✓" : "✗"}</span>
-                <span>Robots.txt: {audit.meta.has_robots ? "✓" : "✗"}</span>
+                <span>Works well on phones: {audit.meta.has_viewport ? "✓" : "✗"}</span>
+                <span>Secure connection: {audit.meta.https_valid ? "✓" : "✗"}</span>
+                <span>Sitemap for Google: {audit.meta.has_sitemap ? "✓" : "✗"}</span>
+                <span>robots.txt: {audit.meta.has_robots ? "✓" : "✗"}</span>
                 {audit.cms_detected && <span>Built on: {audit.cms_detected}</span>}
               </div>
             )}
 
-            {audit.issues && audit.issues.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-text-muted">Issues found</p>
-                {audit.issues.map((issue, i) => (
-                  <div key={i} className="rounded-lg bg-background p-2.5 text-sm">
-                    <p className="font-medium text-text-primary">
-                      {issue.severity === "high" ? "🔴 " : "🟡 "}
-                      {issue.title}
-                    </p>
-                    {issue.detail && <p className="mt-0.5 text-xs text-text-muted">{issue.detail}</p>}
+            {audit.findings && audit.findings.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-text-muted">What We Found</p>
+                {audit.findings.map((finding, i) => (
+                  <div key={i} className="space-y-1.5 rounded-lg bg-background p-3">
+                    <p className="text-sm font-medium text-text-primary">{finding.headline}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-md bg-surface-hover px-2.5 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wide text-text-muted">Your Site</p>
+                        <p className="text-sm font-semibold text-danger">{finding.your_value}</p>
+                      </div>
+                      <div className="rounded-md bg-surface-hover px-2.5 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wide text-text-muted">Good Practice</p>
+                        <p className="text-sm font-semibold text-primary">{finding.good_benchmark}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-text-secondary">{finding.business_impact}</p>
                   </div>
                 ))}
               </div>

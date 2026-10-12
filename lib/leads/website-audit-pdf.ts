@@ -32,6 +32,15 @@ function scoreColor(score: number | null): [number, number, number] {
   return DANGER;
 }
 
+// Google's own standard band names (not invented) — a bare "55" means
+// nothing to a non-technical reader without this.
+function scoreBand(score: number | null): string {
+  if (score === null) return "";
+  if (score >= 90) return "Good";
+  if (score >= 50) return "Needs Improvement";
+  return "Poor";
+}
+
 // Standard Core Web Vitals thresholds (Google's own "good / needs
 // improvement / poor" bands), not an invented scale.
 function lcpColor(ms: number): [number, number, number] {
@@ -105,6 +114,12 @@ export function renderWebsiteAuditPdf(params: {
     }
   }
 
+  function fitOneLine(text: string, maxWidth: number): string {
+    const lines: string[] = doc.splitTextToSize(text, maxWidth);
+    if (lines.length <= 1) return lines[0] ?? text;
+    return `${lines[0].replace(/\s+\S*$/, "")}…`;
+  }
+
   function checkRow(label: string, ok: boolean, detail?: string) {
     ensureSpace(LINE_HEIGHT + 1);
     doc.setFillColor(...(ok ? BRAND : DANGER));
@@ -129,6 +144,12 @@ export function renderWebsiteAuditPdf(params: {
   doc.setFontSize(9.5);
   doc.setTextColor(...TEXT_MUTED);
   doc.text(`${audit.url}   ·   ${new Date(audit.requested_at).toLocaleDateString()}`, MARGIN, y);
+  y += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(...TEXT_SECONDARY);
+  doc.text("A plain-English look at how your website performs for visitors and in Google search.", MARGIN, y);
   y += 9;
 
   // Partial-failure note — a check that didn't complete shouldn't just be
@@ -169,21 +190,26 @@ export function renderWebsiteAuditPdf(params: {
   // Scores
   if (audit.scores) {
     const tileW = (contentWidth - 9) / 4;
-    const tileH = 20;
-    heading("Scores (out of 100)", undefined, tileH + 6);
+    const tileH = 24;
+    heading("Your Site At a Glance", undefined, tileH + 6);
     let tx = MARGIN;
     for (const [key, label] of Object.entries(SCORE_LABELS) as [keyof WebsiteAuditScores, string][]) {
       const score = audit.scores[key];
+      const color = scoreColor(score);
       doc.setFillColor(...SURFACE);
       doc.roundedRect(tx, y, tileW, tileH, 2, 2, "F");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(15);
-      doc.setTextColor(...scoreColor(score));
+      doc.setTextColor(...color);
       doc.text(score === null ? "—" : String(score), tx + tileW / 2, y + 9, { align: "center" });
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(...TEXT_MUTED);
       doc.text(label, tx + tileW / 2, y + 15, { align: "center" });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(...color);
+      doc.text(scoreBand(score), tx + tileW / 2, y + 20, { align: "center" });
       tx += tileW + 3;
     }
     y += tileH + 9;
@@ -226,59 +252,81 @@ export function renderWebsiteAuditPdf(params: {
 
   // Technical checks
   if (audit.meta || audit.cms_detected) {
-    heading("Page & technical checks", undefined, LINE_HEIGHT + 1);
+    heading("Page & Technical Checklist", undefined, LINE_HEIGHT + 1);
     if (audit.meta) {
-      checkRow("Title tag", Boolean(audit.meta.title), audit.meta.title ? `"${audit.meta.title}"` : "missing");
-      checkRow("Meta description", audit.meta.description !== null);
-      checkRow("Mobile viewport tag", audit.meta.has_viewport);
-      checkRow("HTTPS", audit.meta.https_valid);
+      checkRow("Page title", Boolean(audit.meta.title), audit.meta.title ? `"${audit.meta.title}"` : "missing — hurts how you appear in search results");
+      checkRow("Search description", audit.meta.description !== null, audit.meta.description !== null ? undefined : "missing — Google shows a random snippet instead");
+      checkRow("Works well on phones", audit.meta.has_viewport, audit.meta.has_viewport ? undefined : "not set up — most visitors are on mobile");
+      checkRow("Secure connection (HTTPS)", audit.meta.https_valid, audit.meta.https_valid ? "keeps visitor data secure" : "not secure — browsers may warn visitors");
       checkRow("robots.txt", audit.meta.has_robots);
-      checkRow("sitemap.xml", audit.meta.has_sitemap);
+      checkRow("Sitemap for Google", audit.meta.has_sitemap, audit.meta.has_sitemap ? undefined : "missing — can make new pages slower to get found");
     }
     if (audit.cms_detected) checkRow("Built on", true, audit.cms_detected);
     y += 4;
   }
 
-  // Issues
-  if (audit.issues && audit.issues.length > 0) {
-    const issueBlocks = audit.issues.map((issue) => {
-      const titleText = `${issue.severity === "high" ? "High priority — " : "Medium priority — "}${issue.title}`;
+  // Findings — the curated, business-language translation of the raw
+  // PageSpeed/Lighthouse checks (lib/ai synthesizes these; the raw jargon
+  // never reaches this report). Each is its own small comparison table
+  // ("Your Site" vs "Good Practice") rather than one long list, so the gap
+  // is immediately visible, not just asserted in prose.
+  if (audit.findings && audit.findings.length > 0) {
+    const blocks = audit.findings.map((finding) => {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      const titleLines: string[] = doc.splitTextToSize(titleText, contentWidth - 6);
+      doc.setFontSize(10.5);
+      const headlineLines: string[] = doc.splitTextToSize(finding.headline, contentWidth - 6);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      const detailLines: string[] = issue.detail ? doc.splitTextToSize(issue.detail, contentWidth - 6) : [];
-      const blockHeight = titleLines.length * 5.2 + detailLines.length * 4.4 + 4;
-      return { issue, titleLines, detailLines, blockHeight };
+      const impactLines: string[] = doc.splitTextToSize(finding.business_impact, contentWidth - 6);
+      const tableRowH = 14;
+      const blockHeight = headlineLines.length * 5.6 + 2 + tableRowH + 2 + impactLines.length * 4.4 + 5;
+      return { finding, headlineLines, impactLines, tableRowH, blockHeight };
     });
 
-    heading("Issues found", undefined, issueBlocks[0].blockHeight + 3);
+    heading("What We Found", undefined, blocks[0].blockHeight + 3);
 
-    for (const { issue, titleLines, detailLines, blockHeight } of issueBlocks) {
-      ensureSpace(blockHeight + 3);
-
-      doc.setFillColor(...(issue.severity === "high" ? DANGER : WARNING));
-      doc.rect(MARGIN, y - 1, 1.2, blockHeight, "F");
+    for (const { finding, headlineLines, impactLines, tableRowH, blockHeight } of blocks) {
+      ensureSpace(blockHeight + 4);
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
+      doc.setFontSize(10.5);
       doc.setTextColor(...TEXT_PRIMARY);
-      let iy = y + 3;
-      for (const line of titleLines) {
-        doc.text(line, MARGIN + 4, iy);
-        iy += 5.2;
+      let iy = y;
+      for (const line of headlineLines) {
+        doc.text(line, MARGIN, iy);
+        iy += 5.6;
       }
-      if (detailLines.length > 0) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(...TEXT_MUTED);
-        for (const line of detailLines) {
-          doc.text(line, MARGIN + 4, iy);
-          iy += 4.4;
-        }
+      iy += 2;
+
+      const colW = (contentWidth - 4) / 2;
+      doc.setFillColor(...SURFACE);
+      doc.roundedRect(MARGIN, iy, colW, tableRowH, 1.5, 1.5, "F");
+      doc.roundedRect(MARGIN + colW + 4, iy, colW, tableRowH, 1.5, 1.5, "F");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(...TEXT_MUTED);
+      doc.text("YOUR SITE", MARGIN + 4, iy + 5);
+      doc.text("GOOD PRACTICE", MARGIN + colW + 8, iy + 5);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...DANGER);
+      doc.text(fitOneLine(finding.your_value, colW - 8), MARGIN + 4, iy + 11);
+      doc.setTextColor(...BRAND);
+      doc.text(fitOneLine(finding.good_benchmark, colW - 8), MARGIN + colW + 8, iy + 11);
+
+      iy += tableRowH + 2;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...TEXT_SECONDARY);
+      for (const line of impactLines) {
+        doc.text(line, MARGIN, iy);
+        iy += 4.4;
       }
-      y += blockHeight + 3;
+
+      y += blockHeight + 4;
     }
   }
 

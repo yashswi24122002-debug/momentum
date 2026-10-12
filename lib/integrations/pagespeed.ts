@@ -16,6 +16,7 @@ export type PageSpeedIssue = {
   severity: "high" | "medium";
   title: string;
   detail: string;
+  value: string | null; // Lighthouse's own human-readable measured value, e.g. "4.4 s", "3 insecure requests found"
 };
 
 export type PageSpeedResult = {
@@ -27,7 +28,7 @@ export type PageSpeedResult = {
 
 const CATEGORY_KEYS = ["performance", "seo", "accessibility", "best-practices"] as const;
 
-type Audit = { score: number | null; title?: string; description?: string; numericValue?: number };
+type Audit = { score: number | null; title?: string; description?: string; numericValue?: number; displayValue?: string };
 type AuditRef = { id: string; weight: number };
 type LighthouseResult = {
   categories?: Record<string, { score: number | null; auditRefs?: AuditRef[] }>;
@@ -121,6 +122,7 @@ export async function runPageSpeedCheck(url: string): Promise<{ result: PageSpee
           severity: audit.score! < 0.5 ? "high" : "medium",
           title: audit.title!,
           detail: audit.description ? stripMarkdownLinks(audit.description).slice(0, 400) : "",
+          value: audit.displayValue ?? null,
         });
       }
     }

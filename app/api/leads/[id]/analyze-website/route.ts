@@ -17,25 +17,57 @@ const DOCUMENTS_BUCKET = "documents";
 // maxDuration below) even with the website scan and Gemini call on top.
 export const maxDuration = 60;
 
-const SummarySchema = z.object({
+// The reader is a non-technical business owner, not a developer — the
+// whole point of this schema is translating raw Lighthouse jargon
+// ("aria-hidden elements contain focusable descendents") into something a
+// founder can actually act on, with real measured numbers next to a real
+// benchmark instead of a vague "this is slow."
+const AnalysisSchema = z.object({
   summary: z
     .string()
     .describe(
-      "3-5 sentences, plain prose, prioritized narrative of the biggest problems with this website and why they'd matter to this specific business (losing customers, looking untrustworthy, not showing up in search, etc). Reference the screenshot for visual/design observations (cluttered layout, outdated look, unclear call-to-action) alongside the technical findings given — be specific to what's actually visible and measured, not generic website advice."
+      "3-5 sentences, plain prose, written like a consultant's opening paragraph to the business owner — prioritized, specific to what's actually visible and measured (not generic website advice), explaining why it matters in business terms (losing customers, looking untrustworthy, not showing up in search). Reference the screenshot for visual/design observations alongside the technical findings."
     ),
+  findings: z
+    .array(
+      z.object({
+        headline: z.string().describe("A short, plain-English problem name a non-technical person understands immediately, e.g. 'Your website is slow to load' — never Lighthouse's own technical audit name."),
+        your_value: z
+          .string()
+          .describe("The actual measured value for THIS site, in plain terms, e.g. '9.4 seconds' or '3 insecure requests'. Only state a number that was actually given in the data below — never invent one."),
+        good_benchmark: z
+          .string()
+          .describe("What a well-optimized site looks like for this same thing, using the standard benchmarks given below where one exists (e.g. 'under 3.4 seconds'). If this particular check has no numeric benchmark, describe the good state in plain words instead (e.g. 'links should describe where they lead') rather than inventing a fake number."),
+        business_impact: z
+          .string()
+          .describe("One sentence, plain English, no jargon, on what this actually costs the business (lost visitors, lower Google ranking, looking untrustworthy, etc)."),
+      })
+    )
+    .min(3)
+    .max(6)
+    .describe("The 3-6 MOST IMPORTANT problems only, picked and prioritized by you — not every failing check, just the ones that would actually matter to this business."),
 });
+
+const STANDARD_BENCHMARKS = `Standard "good" thresholds for the metrics that have them (Google's own published thresholds — state these accurately, don't make up different numbers):
+- Largest Contentful Paint (main content visible): good is under 2.5s, poor is over 4s
+- First Contentful Paint (something visible at all): good is under 1.8s
+- Speed Index (how quickly the page visibly fills in): good is under 3.4s
+- Total Blocking Time (page responsiveness while loading): good is under 200ms
+- Cumulative Layout Shift (visual stability): good is under 0.1`;
 
 function buildSummaryPrompt(
   lead: Pick<BusinessLead, "name" | "category">,
   pagespeed: Awaited<ReturnType<typeof runPageSpeedCheck>>["result"],
   scan: Awaited<ReturnType<typeof scanWebsite>>["result"]
 ): string {
-  return `Write a prioritized, plain-English summary of what's wrong with ${lead.name}'s website (a ${lead.category ?? "local business"}), based on this real data:
+  return `Write a business-friendly summary and findings for ${lead.name}'s website (a ${lead.category ?? "local business"}), based on this real data. The reader is the business owner — assume no technical knowledge.
 
 PageSpeed Insights scores (0-100, higher is better): ${JSON.stringify(pagespeed?.scores ?? "unavailable")}
-Core Web Vitals: ${JSON.stringify(pagespeed?.vitals ?? "unavailable")}
-Failing checks: ${JSON.stringify(pagespeed?.issues ?? [])}
+Core Web Vitals (raw): ${JSON.stringify(pagespeed?.vitals ?? "unavailable")}
+Failing checks, each with Lighthouse's own measured value where one exists: ${JSON.stringify(pagespeed?.issues ?? [])}
 Page info: ${JSON.stringify(scan ?? "unavailable")}
+
+${STANDARD_BENCHMARKS}
 
 A screenshot of the site as it actually renders is attached — use it for visual/design observations the data above can't capture.`;
 }
@@ -117,15 +149,17 @@ export async function POST(
   }
 
   let aiSummary: string | null = null;
+  let findings: z.infer<typeof AnalysisSchema>["findings"] | null = null;
   try {
     const prompt = buildSummaryPrompt(lead, pagespeed, scan);
-    const { summary } = pagespeed?.screenshotBase64
-      ? await generateContentWithImageAsUser(user.id, isAdmin, prompt, SummarySchema, {
+    const result = pagespeed?.screenshotBase64
+      ? await generateContentWithImageAsUser(user.id, isAdmin, prompt, AnalysisSchema, {
           mimeType: "image/jpeg",
           base64: pagespeed.screenshotBase64,
         })
-      : await generateContentAsUser(user.id, isAdmin, prompt, SummarySchema);
-    aiSummary = summary;
+      : await generateContentAsUser(user.id, isAdmin, prompt, AnalysisSchema);
+    aiSummary = result.summary;
+    findings = result.findings;
   } catch (error) {
     // Degrade gracefully — the raw scores/issues below are still useful
     // without the narrative, so a Gemini hiccup doesn't fail the whole
@@ -143,6 +177,7 @@ export async function POST(
       core_web_vitals: pagespeed?.vitals ?? null,
       screenshot_path: screenshotPath,
       issues: pagespeed?.issues ?? [],
+      findings,
       cms_detected: scan?.cms_detected ?? null,
       meta: scan
         ? {

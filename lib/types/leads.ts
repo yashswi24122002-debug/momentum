@@ -56,6 +56,18 @@ export type WebsiteAuditIssue = {
   severity: "high" | "medium";
   title: string;
   detail: string;
+  value: string | null;
+};
+
+// The curated, business-readable translation of the raw issues above —
+// what actually gets shown in the report/PDF. your_value/good_benchmark
+// are plain strings (not always numeric — some checks aren't quantifiable)
+// rather than invented placeholder numbers when a real one isn't available.
+export type WebsiteAuditFinding = {
+  headline: string;
+  your_value: string;
+  good_benchmark: string;
+  business_impact: string;
 };
 
 export type WebsiteAuditMeta = {
@@ -78,6 +90,7 @@ export type WebsiteAudit = {
   core_web_vitals: WebsiteAuditVitals | null;
   screenshot_path: string | null;
   issues: WebsiteAuditIssue[] | null;
+  findings: WebsiteAuditFinding[] | null;
   cms_detected: string | null;
   meta: WebsiteAuditMeta | null;
   ai_summary: string | null;
