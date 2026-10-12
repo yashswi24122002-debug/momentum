@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { Search, Loader2, ExternalLink, Trash2, Sparkles, MapPin, Send, Kanban } from "lucide-react";
+import { Search, Loader2, ExternalLink, Trash2, Sparkles, MapPin, Send, Kanban, Gauge } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { WebsiteAuditDialog } from "@/components/leads/website-audit-dialog";
 import { fetcher } from "@/lib/swr-fetcher";
 import { LEAD_AREA_ORDER, LEAD_AREA_LABELS, LEAD_STATUS_LABELS, LEAD_STATUS_TONES } from "@/lib/leads/ui";
 import type { BusinessLead, LeadArea } from "@/lib/types/leads";
@@ -28,6 +29,7 @@ export function LeadList() {
   const [drafting, setDrafting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BusinessLead | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [auditTarget, setAuditTarget] = useState<BusinessLead | null>(null);
 
   const { data, mutate } = useSWR<{ leads: BusinessLead[] }>(
     `/api/leads${noWebsiteOnly ? "?has_website=false" : ""}`,
@@ -223,6 +225,12 @@ export function LeadList() {
                   {drafting === lead.id ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
                   {drafting === lead.id ? "Drafting…" : "Draft Pitch"}
                 </Button>
+                {lead.existing_website && (
+                  <Button size="sm" variant="outline" onClick={() => setAuditTarget(lead)}>
+                    <Gauge className="size-3.5" />
+                    Website Report
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -246,6 +254,14 @@ export function LeadList() {
         title={`Delete "${deleteTarget?.name}"?`}
         description="This also deletes any outreach drafted for this lead. This can't be undone."
       />
+
+      {auditTarget && (
+        <WebsiteAuditDialog
+          lead={auditTarget}
+          open={auditTarget !== null}
+          onOpenChange={(open) => !open && setAuditTarget(null)}
+        />
+      )}
     </div>
   );
 }

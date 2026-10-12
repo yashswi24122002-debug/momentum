@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { sendEmail } from "@/lib/email/mailer";
+import { signAttachment } from "@/lib/email/sign-attachment";
 import { logError } from "@/lib/errors/log-error";
 
 export async function POST(
@@ -33,11 +34,26 @@ export async function POST(
     return NextResponse.json({ error: "Missing subject/body" }, { status: 400 });
   }
 
+  // The report PDF is rendered client-side (jsPDF) and uploaded ahead of
+  // send, same as the Jobs tool's resume/cover-letter PDFs — attach it if
+  // one's been generated for this lead's latest audit.
+  const { data: audit } = await supabase
+    .from("website_audits")
+    .select("report_pdf_path")
+    .eq("lead_id", lead.id)
+    .eq("user_id", user.id)
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const reportAttachment = await signAttachment(supabase, audit?.report_pdf_path ?? null, "website-audit.pdf");
+
   const result = await sendEmail({
     to: lead.email,
     subject: outreach.pitch_subject,
     html: body.replace(/\n/g, "<br />"),
     text: body,
+    attachments: reportAttachment ? [reportAttachment] : undefined,
   });
 
   if (!result.success) {

@@ -35,3 +35,54 @@ export type LeadOutreach = {
 export type LeadOutreachWithLead = LeadOutreach & {
   business_leads: Pick<BusinessLead, "name" | "category" | "area"> | null;
 };
+
+export type WebsiteAuditStatus = "pending" | "completed" | "failed";
+
+export type WebsiteAuditScores = {
+  performance: number | null;
+  seo: number | null;
+  accessibility: number | null;
+  best_practices: number | null;
+};
+
+export type WebsiteAuditVitals = {
+  lcp_ms: number | null;
+  cls: number | null;
+  tbt_ms: number | null;
+};
+
+export type WebsiteAuditIssue = {
+  category: "performance" | "seo" | "accessibility" | "best_practices";
+  severity: "high" | "medium";
+  title: string;
+  detail: string;
+};
+
+export type WebsiteAuditMeta = {
+  title: string | null;
+  description: string | null;
+  has_viewport: boolean;
+  https_valid: boolean;
+  has_sitemap: boolean;
+  has_robots: boolean;
+  response_ms: number;
+};
+
+export type WebsiteAudit = {
+  id: string;
+  user_id: string;
+  lead_id: string;
+  url: string;
+  status: WebsiteAuditStatus;
+  scores: WebsiteAuditScores | null;
+  core_web_vitals: WebsiteAuditVitals | null;
+  screenshot_path: string | null;
+  issues: WebsiteAuditIssue[] | null;
+  cms_detected: string | null;
+  meta: WebsiteAuditMeta | null;
+  ai_summary: string | null;
+  report_pdf_path: string | null;
+  error: string | null;
+  requested_at: string;
+  completed_at: string | null;
+};

@@ -6,7 +6,7 @@ import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key"
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
 import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
-import type { BusinessLead } from "@/lib/types/leads";
+import type { BusinessLead, WebsiteAudit } from "@/lib/types/leads";
 import type { ResumeContent } from "@/lib/types/resume";
 
 // Greeting, closing, and sign-off are composed in code — never left to the
@@ -32,17 +32,29 @@ const PitchSchema = z.object({
     .describe("2-3 labeled bullets making the case for why this business should get a website/software built — specific to their category and situation, not generic."),
 });
 
-function buildPrompt(lead: BusinessLead): string {
+function buildPrompt(lead: BusinessLead, audit: WebsiteAudit | null): string {
   const websiteNote = lead.existing_website
     ? `They do have a website already (${lead.existing_website}) — the pitch should focus on it looking outdated/weak or an opportunity to modernize, not "you have no website."`
     : "They have no website at all — this is the core pitch angle: a real, well-reviewed local business with no online presence to bring customers in.";
+
+  // When a completed audit exists, ground the bullets in its actual
+  // findings instead of guessing generically — same mechanical skeleton
+  // either way (greeting/closing/signoff below never change), just a
+  // richer, evidence-based prompt for the one AI-written part.
+  const auditNote =
+    audit?.status === "completed"
+      ? `\n\nA technical audit of their website found real, specific problems — use these instead of generic guesses:
+Scores (0-100): ${JSON.stringify(audit.scores)}
+Top issues: ${JSON.stringify((audit.issues ?? []).slice(0, 6))}
+${audit.ai_summary ? `Summary: ${audit.ai_summary}` : ""}`
+      : "";
 
   return `Write the opening and value-prop bullets for a formal cold-pitch email to a local business offering website/software development services.
 
 Business: ${lead.name}
 Category: ${lead.category ?? "unknown"}
 Google rating: ${lead.google_rating ?? "no rating yet"}
-${websiteNote}
+${websiteNote}${auditNote}
 
 Tone: formal, genuine, specific to this business, not a mass-template feel. Avoid generic phrases like "I hope this email finds you well" or spam-trigger language (exclamation points, all-caps, hard sales pitch).`;
 }
@@ -89,9 +101,18 @@ export async function POST(
     .eq("user_id", user.id)
     .maybeSingle<Pick<ResumeContent, "name" | "mobile">>();
 
+  const { data: audit } = await supabase
+    .from("website_audits")
+    .select("*")
+    .eq("lead_id", id)
+    .eq("user_id", user.id)
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<WebsiteAudit>();
+
   let pitch: z.infer<typeof PitchSchema>;
   try {
-    pitch = await generateContentAsUser(user.id, isAdmin, buildPrompt(lead as BusinessLead), PitchSchema);
+    pitch = await generateContentAsUser(user.id, isAdmin, buildPrompt(lead as BusinessLead, audit), PitchSchema);
   } catch (error) {
     await logError(supabase, "leads/draft-pitch", error instanceof Error ? error.message : String(error), { leadId: id });
     const message =
@@ -104,7 +125,9 @@ export async function POST(
   const greeting = `Hi ${lead.name} team,`;
   const bulletLines = pitch.bullets.map((b) => `- ${b.label}: ${b.text}`).join("\n");
   const closing =
-    "If this is something you'd be interested in exploring, I'd be happy to share more details or a few examples of previous work at your convenience.";
+    audit?.status === "completed"
+      ? "I've attached a short audit of a few areas where your current site could improve, which you're welcome to review regardless of whether we end up working together — and I'd be happy to share more details at your convenience."
+      : "If this is something you'd be interested in exploring, I'd be happy to share more details or a few examples of previous work at your convenience.";
   const signoffLines = [profile?.name, profile?.mobile].filter(Boolean).join("\n");
   const fullBody = `${greeting}\n\n${pitch.opening.trim()}\n\n${bulletLines}\n\n${closing}\n\nBest regards,\n${signoffLines}`;
 

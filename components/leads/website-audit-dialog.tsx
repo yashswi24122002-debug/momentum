@@ -1,0 +1,197 @@
+"use client";
+
+import { useState } from "react";
+import useSWR from "swr";
+import { Loader2, Download, RefreshCw, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/client";
+import { fetcher } from "@/lib/swr-fetcher";
+import { downloadWebsiteAuditPdf, websiteAuditPdfBlob } from "@/lib/leads/website-audit-pdf";
+import type { BusinessLead, WebsiteAudit, WebsiteAuditScores } from "@/lib/types/leads";
+
+const DOCUMENTS_BUCKET = "documents";
+
+const SCORE_LABELS: Record<keyof WebsiteAuditScores, string> = {
+  performance: "Performance",
+  seo: "SEO",
+  accessibility: "Accessibility",
+  best_practices: "Best Practices",
+};
+
+function scoreClass(score: number | null): string {
+  if (score === null) return "text-text-muted";
+  if (score >= 90) return "text-primary";
+  if (score >= 50) return "text-warning";
+  return "text-danger";
+}
+
+async function toDataUrl(url: string): Promise<string> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+export function WebsiteAuditDialog({
+  lead,
+  open,
+  onOpenChange,
+}: {
+  lead: BusinessLead;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const { data, mutate } = useSWR<{ audit: WebsiteAudit | null; screenshotUrl: string | null }>(
+    open ? `/api/leads/${lead.id}/website-audit` : null,
+    fetcher
+  );
+
+  async function runAnalysis() {
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/analyze-website`, { method: "POST" });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "Couldn't analyze that site — try again." }));
+        toast.error(error);
+        return;
+      }
+      await mutate();
+    } catch {
+      toast.error("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function downloadReport(audit: WebsiteAudit, screenshotUrl: string | null) {
+    setDownloading(true);
+    try {
+      const screenshotDataUrl = screenshotUrl ? await toDataUrl(screenshotUrl).catch(() => null) : null;
+      downloadWebsiteAuditPdf({ businessName: lead.name, audit, screenshotDataUrl });
+
+      // Also upload + record the path so the outreach email can attach it.
+      const blob = websiteAuditPdfBlob({ businessName: lead.name, audit, screenshotDataUrl });
+      const path = `${crypto.randomUUID()}.pdf`;
+      const supabase = createClient();
+      const { error: uploadError } = await supabase.storage.from(DOCUMENTS_BUCKET).upload(path, blob, { contentType: "application/pdf" });
+      if (uploadError) throw new Error(uploadError.message);
+
+      const res = await fetch(`/api/leads/${lead.id}/website-audit`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audit_id: audit.id, report_pdf_path: path }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      await mutate();
+      toast.success("Downloaded — it'll also attach automatically when you send this lead's outreach email.");
+    } catch {
+      toast.error("Downloaded, but couldn't prepare it for email attachment — try again.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  const audit = data?.audit ?? null;
+  const screenshotUrl = data?.screenshotUrl ?? null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Website Audit — {lead.name}</DialogTitle>
+        </DialogHeader>
+
+        {data === undefined ? (
+          <div className="space-y-2">
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-40 w-full rounded-xl" />
+          </div>
+        ) : !audit ? (
+          <div className="space-y-3 py-4 text-center">
+            <p className="text-sm text-text-secondary">No analysis yet for {lead.existing_website}.</p>
+            <Button onClick={runAnalysis} disabled={analyzing}>
+              {analyzing ? <Loader2 className="size-4 animate-spin" /> : null}
+              {analyzing ? "Analyzing… this can take up to a minute" : "Run Analysis"}
+            </Button>
+          </div>
+        ) : audit.status === "failed" ? (
+          <div className="space-y-3 py-4 text-center">
+            <p className="flex items-center justify-center gap-1.5 text-sm text-danger">
+              <AlertTriangle className="size-4" /> Couldn&apos;t analyze this site
+            </p>
+            <p className="text-xs text-text-muted">{audit.error}</p>
+            <Button onClick={runAnalysis} disabled={analyzing} variant="outline">
+              {analyzing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-3.5" />}
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {screenshotUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- a signed, short-lived storage URL isn't worth next/image's remote-pattern config for one thumbnail
+              <img src={screenshotUrl} alt="Website screenshot" className="max-h-48 rounded-lg border border-border object-contain" />
+            )}
+
+            {audit.scores && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {(Object.entries(SCORE_LABELS) as [keyof WebsiteAuditScores, string][]).map(([key, label]) => (
+                  <div key={key} className="rounded-lg bg-background px-3 py-2 text-center">
+                    <p className={`text-xl font-semibold ${scoreClass(audit.scores![key])}`}>{audit.scores![key] ?? "—"}</p>
+                    <p className="text-xs text-text-muted">{label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {audit.ai_summary && <p className="text-sm text-text-secondary">{audit.ai_summary}</p>}
+
+            {audit.meta && (
+              <div className="grid grid-cols-2 gap-1.5 text-xs text-text-muted sm:grid-cols-3">
+                <span>Viewport: {audit.meta.has_viewport ? "✓" : "✗"}</span>
+                <span>HTTPS: {audit.meta.https_valid ? "✓" : "✗"}</span>
+                <span>Sitemap: {audit.meta.has_sitemap ? "✓" : "✗"}</span>
+                <span>Robots.txt: {audit.meta.has_robots ? "✓" : "✗"}</span>
+                {audit.cms_detected && <span>Built on: {audit.cms_detected}</span>}
+              </div>
+            )}
+
+            {audit.issues && audit.issues.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-text-muted">Issues found</p>
+                {audit.issues.map((issue, i) => (
+                  <div key={i} className="rounded-lg bg-background p-2.5 text-sm">
+                    <p className="font-medium text-text-primary">
+                      {issue.severity === "high" ? "🔴 " : "🟡 "}
+                      {issue.title}
+                    </p>
+                    {issue.detail && <p className="mt-0.5 text-xs text-text-muted">{issue.detail}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button size="sm" onClick={() => downloadReport(audit, screenshotUrl)} disabled={downloading}>
+                {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                Download Report (PDF)
+              </Button>
+              <Button size="sm" variant="outline" onClick={runAnalysis} disabled={analyzing}>
+                {analyzing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                Re-analyze
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

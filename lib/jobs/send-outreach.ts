@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/mailer";
+import { signAttachment } from "@/lib/email/sign-attachment";
 
 export type JobApplicationRow = {
   id: string;
@@ -13,20 +14,6 @@ export type JobApplicationRow = {
 };
 
 export type SendOutreachResult = { success: true } | { success: false; error: string };
-
-const DOCUMENTS_BUCKET = "documents";
-const SIGNED_URL_TTL_SECONDS = 3600;
-
-/** Signs a documents-bucket path if set, for attaching to the outreach email. */
-async function signAttachment(
-  supabase: SupabaseClient,
-  path: string | null,
-  filename: string
-): Promise<{ filename: string; path: string } | null> {
-  if (!path) return null;
-  const { data } = await supabase.storage.from(DOCUMENTS_BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
-  return data?.signedUrl ? { filename, path: data.signedUrl } : null;
-}
 
 /**
  * Sends the outreach email for one job_applications row — the tailored
