@@ -1,19 +1,22 @@
 import { jsPDF } from "jspdf";
-import type { WebsiteAudit, WebsiteAuditScores } from "@/lib/types/leads";
+import type { WebsiteAudit, WebsiteAuditIssue, WebsiteAuditScores } from "@/lib/types/leads";
 
-// Same palette as the app's own dark theme (app/globals.css) — the report
-// is meant to look like it came from this product, not a generic jsPDF
-// default white page.
-const BG: [number, number, number] = [10, 14, 13];
-const SURFACE: [number, number, number] = [18, 23, 22];
-const SURFACE_HOVER: [number, number, number] = [26, 33, 31];
-const BORDER: [number, number, number] = [35, 43, 41];
-const TEXT_PRIMARY: [number, number, number] = [243, 245, 244];
-const TEXT_SECONDARY: [number, number, number] = [156, 168, 165];
-const TEXT_MUTED: [number, number, number] = [107, 118, 116];
-const BRAND: [number, number, number] = [16, 185, 129];
-const WARNING: [number, number, number] = [245, 158, 11];
-const DANGER: [number, number, number] = [239, 68, 68];
+// Plain, simple, print-friendly light document — not the app's own dark
+// theme. Colors are deliberately a shade deeper than the app's vivid
+// versions where used as text (readable on white), kept vivid for bar
+// fills.
+const TEXT_PRIMARY: [number, number, number] = [17, 24, 21];
+const TEXT_SECONDARY: [number, number, number] = [71, 85, 80];
+const TEXT_MUTED: [number, number, number] = [113, 128, 122];
+const SURFACE: [number, number, number] = [244, 246, 245];
+const SURFACE_HOVER: [number, number, number] = [236, 239, 237];
+const BORDER: [number, number, number] = [222, 228, 224];
+const BRAND: [number, number, number] = [5, 150, 105];
+const BRAND_FILL: [number, number, number] = [16, 185, 129];
+const WARNING: [number, number, number] = [180, 95, 6];
+const WARNING_FILL: [number, number, number] = [245, 158, 11];
+const DANGER: [number, number, number] = [200, 35, 35];
+const DANGER_FILL: [number, number, number] = [239, 68, 68];
 
 const MARGIN = 16;
 const LINE_HEIGHT = 5;
@@ -25,15 +28,15 @@ const SCORE_LABELS: Record<keyof WebsiteAuditScores, string> = {
   best_practices: "Best Practices",
 };
 
-function scoreColor(score: number | null): [number, number, number] {
-  if (score === null) return TEXT_MUTED;
-  if (score >= 90) return BRAND;
-  if (score >= 50) return WARNING;
-  return DANGER;
+function scoreColors(score: number | null): { text: [number, number, number]; fill: [number, number, number] } {
+  if (score === null) return { text: TEXT_MUTED, fill: BORDER };
+  if (score >= 90) return { text: BRAND, fill: BRAND_FILL };
+  if (score >= 50) return { text: WARNING, fill: WARNING_FILL };
+  return { text: DANGER, fill: DANGER_FILL };
 }
 
 // Google's own standard band names (not invented) — a bare "55" means
-// nothing to a non-technical reader without this.
+// nothing without this.
 function scoreBand(score: number | null): string {
   if (score === null) return "";
   if (score >= 90) return "Good";
@@ -43,14 +46,18 @@ function scoreBand(score: number | null): string {
 
 // Standard Core Web Vitals thresholds (Google's own "good / needs
 // improvement / poor" bands), not an invented scale.
-function lcpColor(ms: number): [number, number, number] {
-  return ms <= 2500 ? BRAND : ms <= 4000 ? WARNING : DANGER;
+function lcpColors(ms: number) {
+  return ms <= 2500 ? { text: BRAND, fill: BRAND_FILL } : ms <= 4000 ? { text: WARNING, fill: WARNING_FILL } : { text: DANGER, fill: DANGER_FILL };
 }
-function clsColor(v: number): [number, number, number] {
-  return v <= 0.1 ? BRAND : v <= 0.25 ? WARNING : DANGER;
+function clsColors(v: number) {
+  return v <= 0.1 ? { text: BRAND, fill: BRAND_FILL } : v <= 0.25 ? { text: WARNING, fill: WARNING_FILL } : { text: DANGER, fill: DANGER_FILL };
 }
-function tbtColor(ms: number): [number, number, number] {
-  return ms <= 200 ? BRAND : ms <= 600 ? WARNING : DANGER;
+function tbtColors(ms: number) {
+  return ms <= 200 ? { text: BRAND, fill: BRAND_FILL } : ms <= 600 ? { text: WARNING, fill: WARNING_FILL } : { text: DANGER, fill: DANGER_FILL };
+}
+
+function severityColor(severity: WebsiteAuditIssue["severity"]) {
+  return severity === "high" ? DANGER_FILL : WARNING_FILL;
 }
 
 function slugify(text: string): string {
@@ -75,15 +82,9 @@ export function renderWebsiteAuditPdf(params: {
   const contentWidth = pageWidth - MARGIN * 2;
   let y = MARGIN;
 
-  function paintBackground() {
-    doc.setFillColor(...BG);
-    doc.rect(0, 0, pageWidth, pageHeight, "F");
-  }
-
   function ensureSpace(h: number) {
     if (y + h > pageHeight - MARGIN) {
       doc.addPage();
-      paintBackground();
       y = MARGIN;
     }
   }
@@ -91,13 +92,13 @@ export function renderWebsiteAuditPdf(params: {
   // followingHeight reserves room for the heading PLUS whatever comes right
   // after it, so a heading never gets stranded alone at the bottom of a
   // page with its content pushed to the next one.
-  function heading(text: string, color: [number, number, number] = TEXT_PRIMARY, followingHeight = 0) {
+  function heading(text: string, followingHeight = 0) {
     ensureSpace(11 + followingHeight);
-    doc.setFillColor(...BRAND);
+    doc.setFillColor(...BRAND_FILL);
     doc.rect(MARGIN, y - 3.2, 1.2, 4.2, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11.5);
-    doc.setTextColor(...color);
+    doc.setTextColor(...TEXT_PRIMARY);
     doc.text(text, MARGIN + 4, y);
     y += 7;
   }
@@ -122,7 +123,7 @@ export function renderWebsiteAuditPdf(params: {
 
   function checkRow(label: string, ok: boolean, detail?: string) {
     ensureSpace(LINE_HEIGHT + 1);
-    doc.setFillColor(...(ok ? BRAND : DANGER));
+    doc.setFillColor(...(ok ? BRAND_FILL : DANGER_FILL));
     doc.circle(MARGIN + 1.3, y - 1.3, 1.3, "F");
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9.5);
@@ -131,7 +132,45 @@ export function renderWebsiteAuditPdf(params: {
     y += LINE_HEIGHT + 1;
   }
 
-  paintBackground();
+  // One horizontal bar per row: label on the left, a track + filled bar
+  // scaled to `value / max` (clamped to 1), the display value at the bar's
+  // end, and an optional "good" threshold tick drawn on top of the track.
+  function barRow(label: string, value: number, max: number, displayValue: string, colors: { fill: [number, number, number] }, goodThreshold?: number) {
+    const rowH = 11;
+    ensureSpace(rowH);
+    const labelW = 40;
+    const valueW = 46;
+    const chartLeft = MARGIN + labelW;
+    const chartWidth = contentWidth - labelW - valueW;
+    const barY = y - 3.2;
+    const barH = 4.5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...TEXT_SECONDARY);
+    doc.text(fitOneLine(label, labelW - 3), MARGIN, y);
+
+    doc.setFillColor(...SURFACE);
+    doc.roundedRect(chartLeft, barY, chartWidth, barH, 1, 1, "F");
+
+    const filledW = Math.max(chartWidth * Math.min(value / max, 1), 1.5);
+    doc.setFillColor(...colors.fill);
+    doc.roundedRect(chartLeft, barY, filledW, barH, 1, 1, "F");
+
+    if (goodThreshold !== undefined) {
+      const tickX = chartLeft + chartWidth * Math.min(goodThreshold / max, 1);
+      doc.setDrawColor(...TEXT_MUTED);
+      doc.setLineWidth(0.3);
+      doc.line(tickX, barY - 0.8, tickX, barY + barH + 0.8);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...TEXT_PRIMARY);
+    doc.text(fitOneLine(displayValue, valueW - 3), chartLeft + chartWidth + 3, y);
+
+    y += rowH;
+  }
 
   // Title
   doc.setFont("helvetica", "bold");
@@ -149,7 +188,7 @@ export function renderWebsiteAuditPdf(params: {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...TEXT_SECONDARY);
-  doc.text("A plain-English look at how your website performs for visitors and in Google search.", MARGIN, y);
+  doc.text("A technical look at how your website performs for visitors and in Google search.", MARGIN, y);
   y += 9;
 
   // Partial-failure note — a check that didn't complete shouldn't just be
@@ -174,7 +213,7 @@ export function renderWebsiteAuditPdf(params: {
   // Screenshot
   if (screenshotDataUrl) {
     try {
-      const imgWidth = 90;
+      const imgWidth = 80;
       const imgHeight = imgWidth * 1.8;
       ensureSpace(imgHeight + 6);
       doc.setDrawColor(...BORDER);
@@ -187,60 +226,40 @@ export function renderWebsiteAuditPdf(params: {
     }
   }
 
-  // Scores
+  // Scores — bar chart (relative magnitude at a glance) plus the exact
+  // number and Google's own band name for each.
   if (audit.scores) {
-    const tileW = (contentWidth - 9) / 4;
-    const tileH = 24;
-    heading("Your Site At a Glance", undefined, tileH + 6);
-    let tx = MARGIN;
+    const rowH = 11;
+    const rowCount = Object.keys(SCORE_LABELS).length;
+    heading("Scores (out of 100)", rowCount * rowH + 4);
     for (const [key, label] of Object.entries(SCORE_LABELS) as [keyof WebsiteAuditScores, string][]) {
       const score = audit.scores[key];
-      const color = scoreColor(score);
-      doc.setFillColor(...SURFACE);
-      doc.roundedRect(tx, y, tileW, tileH, 2, 2, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(15);
-      doc.setTextColor(...color);
-      doc.text(score === null ? "—" : String(score), tx + tileW / 2, y + 9, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(...TEXT_MUTED);
-      doc.text(label, tx + tileW / 2, y + 15, { align: "center" });
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
-      doc.setTextColor(...color);
-      doc.text(scoreBand(score), tx + tileW / 2, y + 20, { align: "center" });
-      tx += tileW + 3;
+      const colors = scoreColors(score);
+      barRow(label, score ?? 0, 100, score === null ? "—" : `${score} · ${scoreBand(score)}`, colors);
     }
-    y += tileH + 9;
+    y += 4;
   }
 
-  // Core Web Vitals
+  // Core Web Vitals — same bar-chart treatment, each scaled to a sensible
+  // max for its own unit, with a tick mark at Google's "good" threshold so
+  // the gap is visible, not just stated.
   if (audit.core_web_vitals && (audit.core_web_vitals.lcp_ms !== null || audit.core_web_vitals.cls !== null || audit.core_web_vitals.tbt_ms !== null)) {
     const { lcp_ms, cls, tbt_ms } = audit.core_web_vitals;
-    const vitals: { label: string; value: string; color: [number, number, number] }[] = [];
-    if (lcp_ms !== null) vitals.push({ label: "Largest Contentful Paint", value: `${(lcp_ms / 1000).toFixed(1)}s`, color: lcpColor(lcp_ms) });
-    if (cls !== null) vitals.push({ label: "Cumulative Layout Shift", value: cls.toFixed(2), color: clsColor(cls) });
-    if (tbt_ms !== null) vitals.push({ label: "Total Blocking Time", value: `${Math.round(tbt_ms)}ms`, color: tbtColor(tbt_ms) });
+    const rows: { label: string; value: number; max: number; display: string; colors: { fill: [number, number, number] }; threshold: number }[] = [];
+    if (lcp_ms !== null) rows.push({ label: "Largest Contentful Paint", value: lcp_ms, max: 10000, display: `${(lcp_ms / 1000).toFixed(1)}s`, colors: lcpColors(lcp_ms), threshold: 2500 });
+    if (cls !== null) rows.push({ label: "Cumulative Layout Shift", value: cls, max: 0.5, display: cls.toFixed(2), colors: clsColors(cls), threshold: 0.1 });
+    if (tbt_ms !== null) rows.push({ label: "Total Blocking Time", value: tbt_ms, max: 1000, display: `${Math.round(tbt_ms)}ms`, colors: tbtColors(tbt_ms), threshold: 200 });
 
-    const tileW = (contentWidth - (vitals.length - 1) * 3) / vitals.length;
-    const tileH = 18;
-    heading("Load performance (mobile)", undefined, tileH + 6);
-    let tx = MARGIN;
-    for (const v of vitals) {
-      doc.setFillColor(...SURFACE);
-      doc.roundedRect(tx, y, tileW, tileH, 2, 2, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(...v.color);
-      doc.text(v.value, tx + tileW / 2, y + 8, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
-      doc.setTextColor(...TEXT_MUTED);
-      doc.text(v.label, tx + tileW / 2, y + 14, { align: "center", maxWidth: tileW - 4 });
-      tx += tileW + 3;
+    const rowH = 11;
+    heading("Load Performance (mobile)", rows.length * rowH + 7);
+    for (const r of rows) {
+      barRow(r.label, r.value, r.max, r.display, r.colors, r.threshold);
     }
-    y += tileH + 9;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text("The vertical tick on each bar marks Google's own \"good\" threshold for that metric.", MARGIN, y);
+    y += 8;
   }
 
   // Summary
@@ -252,7 +271,7 @@ export function renderWebsiteAuditPdf(params: {
 
   // Technical checks
   if (audit.meta || audit.cms_detected) {
-    heading("Page & Technical Checklist", undefined, LINE_HEIGHT + 1);
+    heading("Page & Technical Checklist", LINE_HEIGHT + 1);
     if (audit.meta) {
       checkRow("Page title", Boolean(audit.meta.title), audit.meta.title ? `"${audit.meta.title}"` : "missing — hurts how you appear in search results");
       checkRow("Search description", audit.meta.description !== null, audit.meta.description !== null ? undefined : "missing — Google shows a random snippet instead");
@@ -265,11 +284,9 @@ export function renderWebsiteAuditPdf(params: {
     y += 4;
   }
 
-  // Findings — the curated, business-language translation of the raw
-  // PageSpeed/Lighthouse checks (lib/ai synthesizes these; the raw jargon
-  // never reaches this report). Each is its own small comparison table
-  // ("Your Site" vs "Good Practice") rather than one long list, so the gap
-  // is immediately visible, not just asserted in prose.
+  // Findings — curated, business-language translation of the most
+  // important raw checks. Each is its own small comparison table ("Your
+  // Site" vs "Good Practice") so the gap is visible, not just asserted.
   if (audit.findings && audit.findings.length > 0) {
     const blocks = audit.findings.map((finding) => {
       doc.setFont("helvetica", "bold");
@@ -283,7 +300,7 @@ export function renderWebsiteAuditPdf(params: {
       return { finding, headlineLines, impactLines, tableRowH, blockHeight };
     });
 
-    heading("What We Found", undefined, blocks[0].blockHeight + 3);
+    heading("What We Found", blocks[0].blockHeight + 3);
 
     for (const { finding, headlineLines, impactLines, tableRowH, blockHeight } of blocks) {
       ensureSpace(blockHeight + 4);
@@ -327,6 +344,54 @@ export function renderWebsiteAuditPdf(params: {
       }
 
       y += blockHeight + 4;
+    }
+  }
+
+  // Full technical findings — the complete raw PageSpeed/Lighthouse checks
+  // (not just the curated handful above), for anyone who wants the deeper
+  // detail: every failing audit with its measured value and Lighthouse's
+  // own description.
+  if (audit.issues && audit.issues.length > 0) {
+    const rows = audit.issues.map((issue) => {
+      const titleText = `${issue.severity === "high" ? "High — " : "Medium — "}${issue.title}${issue.value ? ` (${issue.value})` : ""}`;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      const titleLines: string[] = doc.splitTextToSize(titleText, contentWidth - 6);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      const detailLines: string[] = issue.detail ? doc.splitTextToSize(issue.detail, contentWidth - 6) : [];
+      const rowHeight = titleLines.length * 4.8 + detailLines.length * 4 + 3;
+      return { issue, titleLines, detailLines, rowHeight };
+    });
+
+    heading("Full Technical Findings", rows[0].rowHeight + 3);
+    paragraph("Every failing Lighthouse check this analysis found, in full technical detail.", 8.5, TEXT_MUTED);
+    y += 2;
+
+    for (const { issue, titleLines, detailLines, rowHeight } of rows) {
+      ensureSpace(rowHeight + 2);
+
+      doc.setFillColor(...severityColor(issue.severity));
+      doc.rect(MARGIN, y - 0.8, 1, rowHeight - 1, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...TEXT_PRIMARY);
+      let iy = y + 2.8;
+      for (const line of titleLines) {
+        doc.text(line, MARGIN + 4, iy);
+        iy += 4.8;
+      }
+      if (detailLines.length > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(...TEXT_MUTED);
+        for (const line of detailLines) {
+          doc.text(line, MARGIN + 4, iy);
+          iy += 4;
+        }
+      }
+      y += rowHeight + 2;
     }
   }
 
