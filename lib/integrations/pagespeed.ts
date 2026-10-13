@@ -12,6 +12,7 @@ export type CoreWebVitals = {
 };
 
 export type PageSpeedIssue = {
+  id: string; // the raw Lighthouse audit id, e.g. "largest-contentful-paint" — used to look up a known benchmark
   category: "performance" | "seo" | "accessibility" | "best_practices";
   severity: "high" | "medium";
   title: string;
@@ -116,8 +117,9 @@ export async function runPageSpeedCheck(url: string): Promise<{ result: PageSpee
         .sort((a, b) => b.ref.weight - a.ref.weight)
         .slice(0, 5);
 
-      for (const { audit } of failing) {
+      for (const { ref, audit } of failing) {
         issues.push({
+          id: ref.id,
           category: catLabel,
           severity: audit.score! < 0.5 ? "high" : "medium",
           title: audit.title!,

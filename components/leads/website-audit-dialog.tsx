@@ -10,9 +10,29 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { fetcher } from "@/lib/swr-fetcher";
 import { downloadWebsiteAuditPdf, websiteAuditPdfBlob } from "@/lib/leads/website-audit-pdf";
+import { LIGHTHOUSE_BENCHMARKS, DEFAULT_LIGHTHOUSE_BENCHMARK } from "@/lib/integrations/lighthouse-benchmarks";
 import type { BusinessLead, WebsiteAudit, WebsiteAuditScores } from "@/lib/types/leads";
 
 const DOCUMENTS_BUCKET = "documents";
+
+function ComparisonCard({ headline, yourValue, goodValue, impact }: { headline: string; yourValue: string; goodValue: string; impact?: string }) {
+  return (
+    <div className="space-y-1.5 rounded-lg bg-background p-3">
+      <p className="text-sm font-medium text-text-primary">{headline}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-md bg-surface-hover px-2.5 py-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-text-muted">Your Site</p>
+          <p className="text-sm font-semibold text-danger">{yourValue}</p>
+        </div>
+        <div className="rounded-md bg-surface-hover px-2.5 py-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-text-muted">Good Practice</p>
+          <p className="text-sm font-semibold text-primary">{goodValue}</p>
+        </div>
+      </div>
+      {impact && <p className="text-xs text-text-secondary">{impact}</p>}
+    </div>
+  );
+}
 
 const SCORE_LABELS: Record<keyof WebsiteAuditScores, string> = {
   performance: "Performance",
@@ -175,20 +195,28 @@ export function WebsiteAuditDialog({
               <div className="space-y-3">
                 <p className="text-xs font-medium text-text-muted">What We Found</p>
                 {audit.findings.map((finding, i) => (
-                  <div key={i} className="space-y-1.5 rounded-lg bg-background p-3">
-                    <p className="text-sm font-medium text-text-primary">{finding.headline}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-md bg-surface-hover px-2.5 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide text-text-muted">Your Site</p>
-                        <p className="text-sm font-semibold text-danger">{finding.your_value}</p>
-                      </div>
-                      <div className="rounded-md bg-surface-hover px-2.5 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide text-text-muted">Good Practice</p>
-                        <p className="text-sm font-semibold text-primary">{finding.good_benchmark}</p>
-                      </div>
-                    </div>
-                    <p className="text-xs text-text-secondary">{finding.business_impact}</p>
-                  </div>
+                  <ComparisonCard
+                    key={i}
+                    headline={finding.headline}
+                    yourValue={finding.your_value}
+                    goodValue={finding.good_benchmark}
+                    impact={finding.business_impact}
+                  />
+                ))}
+              </div>
+            )}
+
+            {audit.issues && audit.issues.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-text-muted">Full Technical Findings</p>
+                {audit.issues.map((issue, i) => (
+                  <ComparisonCard
+                    key={i}
+                    headline={`${issue.severity === "high" ? "High" : "Medium"} — ${issue.title}`}
+                    yourValue={issue.value ?? "Fails this check"}
+                    goodValue={LIGHTHOUSE_BENCHMARKS[issue.id] ?? DEFAULT_LIGHTHOUSE_BENCHMARK}
+                    impact={issue.detail}
+                  />
                 ))}
               </div>
             )}

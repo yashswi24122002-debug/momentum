@@ -52,6 +52,7 @@ export type WebsiteAuditVitals = {
 };
 
 export type WebsiteAuditIssue = {
+  id: string;
   category: "performance" | "seo" | "accessibility" | "best_practices";
   severity: "high" | "medium";
   title: string;

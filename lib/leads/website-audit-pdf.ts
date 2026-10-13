@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
-import type { WebsiteAudit, WebsiteAuditIssue, WebsiteAuditScores } from "@/lib/types/leads";
+import type { WebsiteAudit, WebsiteAuditScores } from "@/lib/types/leads";
+import { LIGHTHOUSE_BENCHMARKS, DEFAULT_LIGHTHOUSE_BENCHMARK } from "@/lib/integrations/lighthouse-benchmarks";
 
 // Plain, simple, print-friendly light document — not the app's own dark
 // theme. Colors are deliberately a shade deeper than the app's vivid
@@ -54,10 +55,6 @@ function clsColors(v: number) {
 }
 function tbtColors(ms: number) {
   return ms <= 200 ? { text: BRAND, fill: BRAND_FILL } : ms <= 600 ? { text: WARNING, fill: WARNING_FILL } : { text: DANGER, fill: DANGER_FILL };
-}
-
-function severityColor(severity: WebsiteAuditIssue["severity"]) {
-  return severity === "high" ? DANGER_FILL : WARNING_FILL;
 }
 
 function slugify(text: string): string {
@@ -170,6 +167,69 @@ export function renderWebsiteAuditPdf(params: {
     doc.text(fitOneLine(displayValue, valueW - 3), chartLeft + chartWidth + 3, y);
 
     y += rowH;
+  }
+
+  // Pre-measures a headline + "Your Site vs Good Practice" comparison
+  // table + an explanation paragraph, used for both the curated findings
+  // and the full raw technical findings — same visual, different data.
+  function measureComparisonBlock(headline: string, impact: string) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    const headlineLines: string[] = doc.splitTextToSize(headline, contentWidth - 6);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const impactLines: string[] = impact ? doc.splitTextToSize(impact, contentWidth - 6) : [];
+    const tableRowH = 14;
+    const blockHeight = headlineLines.length * 5.6 + 2 + tableRowH + 2 + (impactLines.length > 0 ? impactLines.length * 4.4 + 2 : 0);
+    return { headlineLines, impactLines, tableRowH, blockHeight };
+  }
+
+  function drawComparisonBlock(
+    headlineLines: string[],
+    yourValue: string,
+    goodValue: string,
+    impactLines: string[],
+    tableRowH: number
+  ) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(...TEXT_PRIMARY);
+    let iy = y;
+    for (const line of headlineLines) {
+      doc.text(line, MARGIN, iy);
+      iy += 5.6;
+    }
+    iy += 2;
+
+    const colW = (contentWidth - 4) / 2;
+    doc.setFillColor(...SURFACE);
+    doc.roundedRect(MARGIN, iy, colW, tableRowH, 1.5, 1.5, "F");
+    doc.roundedRect(MARGIN + colW + 4, iy, colW, tableRowH, 1.5, 1.5, "F");
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text("YOUR SITE", MARGIN + 4, iy + 5);
+    doc.text("GOOD PRACTICE", MARGIN + colW + 8, iy + 5);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...DANGER);
+    doc.text(fitOneLine(yourValue, colW - 8), MARGIN + 4, iy + 11);
+    doc.setTextColor(...BRAND);
+    doc.text(fitOneLine(goodValue, colW - 8), MARGIN + colW + 8, iy + 11);
+
+    iy += tableRowH + 2;
+
+    if (impactLines.length > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...TEXT_SECONDARY);
+      for (const line of impactLines) {
+        doc.text(line, MARGIN, iy);
+        iy += 4.4;
+      }
+    }
   }
 
   // Title
@@ -288,110 +348,42 @@ export function renderWebsiteAuditPdf(params: {
   // important raw checks. Each is its own small comparison table ("Your
   // Site" vs "Good Practice") so the gap is visible, not just asserted.
   if (audit.findings && audit.findings.length > 0) {
-    const blocks = audit.findings.map((finding) => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10.5);
-      const headlineLines: string[] = doc.splitTextToSize(finding.headline, contentWidth - 6);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      const impactLines: string[] = doc.splitTextToSize(finding.business_impact, contentWidth - 6);
-      const tableRowH = 14;
-      const blockHeight = headlineLines.length * 5.6 + 2 + tableRowH + 2 + impactLines.length * 4.4 + 5;
-      return { finding, headlineLines, impactLines, tableRowH, blockHeight };
-    });
+    const blocks = audit.findings.map((finding) => ({ finding, ...measureComparisonBlock(finding.headline, finding.business_impact) }));
 
     heading("What We Found", blocks[0].blockHeight + 3);
 
     for (const { finding, headlineLines, impactLines, tableRowH, blockHeight } of blocks) {
       ensureSpace(blockHeight + 4);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10.5);
-      doc.setTextColor(...TEXT_PRIMARY);
-      let iy = y;
-      for (const line of headlineLines) {
-        doc.text(line, MARGIN, iy);
-        iy += 5.6;
-      }
-      iy += 2;
-
-      const colW = (contentWidth - 4) / 2;
-      doc.setFillColor(...SURFACE);
-      doc.roundedRect(MARGIN, iy, colW, tableRowH, 1.5, 1.5, "F");
-      doc.roundedRect(MARGIN + colW + 4, iy, colW, tableRowH, 1.5, 1.5, "F");
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
-      doc.setTextColor(...TEXT_MUTED);
-      doc.text("YOUR SITE", MARGIN + 4, iy + 5);
-      doc.text("GOOD PRACTICE", MARGIN + colW + 8, iy + 5);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
-      doc.setTextColor(...DANGER);
-      doc.text(fitOneLine(finding.your_value, colW - 8), MARGIN + 4, iy + 11);
-      doc.setTextColor(...BRAND);
-      doc.text(fitOneLine(finding.good_benchmark, colW - 8), MARGIN + colW + 8, iy + 11);
-
-      iy += tableRowH + 2;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(...TEXT_SECONDARY);
-      for (const line of impactLines) {
-        doc.text(line, MARGIN, iy);
-        iy += 4.4;
-      }
-
+      drawComparisonBlock(headlineLines, finding.your_value, finding.good_benchmark, impactLines, tableRowH);
       y += blockHeight + 4;
     }
   }
 
   // Full technical findings — the complete raw PageSpeed/Lighthouse checks
   // (not just the curated handful above), for anyone who wants the deeper
-  // detail: every failing audit with its measured value and Lighthouse's
-  // own description.
+  // detail: every failing audit gets the same "Your Site vs Good Practice"
+  // comparison table as the curated findings, using Google's own published
+  // benchmark where one is known for that specific check (not invented).
   if (audit.issues && audit.issues.length > 0) {
-    const rows = audit.issues.map((issue) => {
-      const titleText = `${issue.severity === "high" ? "High — " : "Medium — "}${issue.title}${issue.value ? ` (${issue.value})` : ""}`;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
-      const titleLines: string[] = doc.splitTextToSize(titleText, contentWidth - 6);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.5);
-      const detailLines: string[] = issue.detail ? doc.splitTextToSize(issue.detail, contentWidth - 6) : [];
-      const rowHeight = titleLines.length * 4.8 + detailLines.length * 4 + 3;
-      return { issue, titleLines, detailLines, rowHeight };
-    });
+    const rows = audit.issues.map((issue) => ({
+      issue,
+      ...measureComparisonBlock(`${issue.severity === "high" ? "High — " : "Medium — "}${issue.title}`, issue.detail),
+    }));
 
-    heading("Full Technical Findings", rows[0].rowHeight + 3);
-    paragraph("Every failing Lighthouse check this analysis found, in full technical detail.", 8.5, TEXT_MUTED);
+    heading("Full Technical Findings", rows[0].blockHeight + 3);
+    paragraph("Every failing Lighthouse check this analysis found, each measured against Google's own recommended practice.", 8.5, TEXT_MUTED);
     y += 2;
 
-    for (const { issue, titleLines, detailLines, rowHeight } of rows) {
-      ensureSpace(rowHeight + 2);
-
-      doc.setFillColor(...severityColor(issue.severity));
-      doc.rect(MARGIN, y - 0.8, 1, rowHeight - 1, "F");
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
-      doc.setTextColor(...TEXT_PRIMARY);
-      let iy = y + 2.8;
-      for (const line of titleLines) {
-        doc.text(line, MARGIN + 4, iy);
-        iy += 4.8;
-      }
-      if (detailLines.length > 0) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8.5);
-        doc.setTextColor(...TEXT_MUTED);
-        for (const line of detailLines) {
-          doc.text(line, MARGIN + 4, iy);
-          iy += 4;
-        }
-      }
-      y += rowHeight + 2;
+    for (const { issue, headlineLines, impactLines, tableRowH, blockHeight } of rows) {
+      ensureSpace(blockHeight + 4);
+      drawComparisonBlock(
+        headlineLines,
+        issue.value ?? "Fails this check",
+        LIGHTHOUSE_BENCHMARKS[issue.id] ?? DEFAULT_LIGHTHOUSE_BENCHMARK,
+        impactLines,
+        tableRowH
+      );
+      y += blockHeight + 4;
     }
   }
 
