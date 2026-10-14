@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
-import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError, ServerOverloadedError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 
 const ReportSchema = z.object({
@@ -89,7 +89,9 @@ export async function POST(
     const message =
       error instanceof GenerateContentError
         ? "The AI couldn't produce a usable report — try approving again."
-        : "Something went wrong generating the report — try again.";
+        : error instanceof ServerOverloadedError
+          ? "Gemini is temporarily overloaded with requests — try again in a moment."
+          : "Something went wrong generating the report — try again.";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 

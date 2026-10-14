@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
-import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError, ServerOverloadedError } from "@/lib/ai/generate-content";
 import { fetchRedditSignals } from "@/lib/integrations/reddit";
 import { fetchYouTubeSignals } from "@/lib/integrations/youtube";
 import { fetchGoogleTrendsSignals } from "@/lib/integrations/google-trends";
@@ -231,7 +231,9 @@ export async function POST(request: NextRequest) {
     const message =
       error instanceof GenerateContentError
         ? "The AI didn't return usable ideas — try generating again."
-        : "Something went wrong generating ideas — try again.";
+        : error instanceof ServerOverloadedError
+          ? "Gemini is temporarily overloaded with requests — try again in a moment."
+          : "Something went wrong generating ideas — try again.";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 

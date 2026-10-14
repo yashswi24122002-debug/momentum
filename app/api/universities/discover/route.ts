@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
-import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError, ServerOverloadedError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 import { matchCuratedUniversity } from "@/lib/masters-abroad/curated-universities";
 import { DISCOVERY_COURSE_PROMPT } from "@/lib/masters-abroad/ui";
@@ -84,7 +84,9 @@ export async function POST(request: NextRequest) {
     const message =
       error instanceof GenerateContentError
         ? "The AI couldn't produce usable suggestions — try again."
-        : "Something went wrong finding universities — try again.";
+        : error instanceof ServerOverloadedError
+          ? "Gemini is temporarily overloaded with requests — try again in a moment."
+          : "Something went wrong finding universities — try again.";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 

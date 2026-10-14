@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
-import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError, ServerOverloadedError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 
 // Fills in the "New personal food" form so the member doesn't have to leave
@@ -72,7 +72,9 @@ export async function POST(request: NextRequest) {
     const message =
       error instanceof GenerateContentError
         ? "The AI couldn't produce usable nutrition estimates for that — try adjusting the name or enter the details manually."
-        : "Something went wrong fetching those details — try again.";
+        : error instanceof ServerOverloadedError
+          ? "Gemini is temporarily overloaded with requests — try again in a moment."
+          : "Something went wrong fetching those details — try again.";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

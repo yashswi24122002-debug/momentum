@@ -13,10 +13,30 @@ const MODEL = "gemini-3.6-flash";
 
 export class GenerateContentError extends Error {}
 export class QuotaExceededError extends Error {}
+export class ServerOverloadedError extends Error {}
 
 function isQuotaError(error: unknown): boolean {
   return (error as { status?: number } | null)?.status === 429;
 }
+
+// Google's own "high demand" 503 — distinct from a quota error (429) and
+// from a genuinely malformed response. In practice this has turned out to
+// be the single most common draft-pitch failure (confirmed via error_logs:
+// every logged "couldn't produce a usable pitch" was actually this, not a
+// real schema mismatch), so it gets its own detection, its own short
+// backoff-and-retry loop, and its own honest error message instead of
+// being lumped into "the response didn't match the schema."
+function isOverloadedError(error: unknown): boolean {
+  const status = (error as { status?: number } | null)?.status;
+  const message = error instanceof Error ? error.message : String(error);
+  return status === 503 || /unavailable|overloaded|high demand/i.test(message);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const MAX_OVERLOAD_RETRIES = 3;
 
 async function runGenerate<T>(apiKey: string, contents: ContentListUnion, schema: z.ZodType<T>): Promise<T> {
   const client = new GoogleGenAI({ apiKey });
@@ -45,21 +65,38 @@ async function runGenerate<T>(apiKey: string, contents: ContentListUnion, schema
     return schema.parse(parsed);
   }
 
-  try {
-    return await attempt();
-  } catch (error) {
-    if (isQuotaError(error)) throw new QuotaExceededError("This key's Gemini quota is exhausted");
+  let lastOverloadError: unknown;
+  let usedMalformedRetry = false;
+
+  for (let i = 0; i < MAX_OVERLOAD_RETRIES; i++) {
     try {
       return await attempt();
-    } catch (error2) {
-      if (isQuotaError(error2)) throw new QuotaExceededError("This key's Gemini quota is exhausted");
-      throw new GenerateContentError(
-        `Gemini response did not match the expected schema after retry: ${
-          error2 instanceof Error ? error2.message : String(error2)
-        }`
-      );
+    } catch (error) {
+      if (isQuotaError(error)) throw new QuotaExceededError("This key's Gemini quota is exhausted");
+
+      if (isOverloadedError(error)) {
+        lastOverloadError = error;
+        if (i < MAX_OVERLOAD_RETRIES - 1) await sleep(600 * (i + 1));
+        continue;
+      }
+
+      // A genuine malformed/invalid response (not overload, not quota) —
+      // one extra immediate attempt (no backoff needed, it's not a
+      // rate/availability issue), then give up with the schema-mismatch
+      // message. Only ever used once per call, regardless of how many
+      // overload retries happened first.
+      if (usedMalformedRetry) {
+        throw new GenerateContentError(
+          `Gemini response did not match the expected schema: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+      usedMalformedRetry = true;
     }
   }
+
+  throw new ServerOverloadedError(
+    `Gemini is temporarily overloaded: ${lastOverloadError instanceof Error ? lastOverloadError.message : String(lastOverloadError)}`
+  );
 }
 
 /**

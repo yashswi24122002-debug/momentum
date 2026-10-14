@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
-import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError, ServerOverloadedError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 import type { BusinessLead, WebsiteAudit } from "@/lib/types/leads";
 import type { ResumeContent } from "@/lib/types/resume";
@@ -12,15 +12,22 @@ import type { ResumeContent } from "@/lib/types/resume";
 // Subject, greeting, personal intro, closing, and sign-off are all composed
 // in code — never left to the model — so the format is guaranteed every
 // time and the subject line in particular can never pick up spam-trigger
-// phrasing. The AI only writes the middle paragraph: flowing prose (not a
-// labeled bullet list — that format reads as AI-written and is itself a
-// spam-filter heuristic for mass-marketing templates) describing the
-// business's situation and the specific issues found.
+// phrasing. The AI writes a one-sentence context opener plus the specific
+// findings as bullet points (not a labeled "Label: text" list, which reads
+// as AI-written and is itself a spam-filter heuristic for mass-marketing
+// templates — plain bullets with the key number bolded instead).
 const PitchSchema = z.object({
-  findings_prose: z
+  opening: z
     .string()
     .describe(
-      "2-4 formal sentences of connected prose (never a bulleted or labeled list) covering the overall impression and the most important specific issues with their website — or, if they have no website, the opportunity one represents. Ground this in the real data given below when available, not generic guesses. Formal register throughout, no contractions, no spam-trigger language (exclamation points, ALL-CAPS, hard sales pitch, \"I hope this email finds you well\")."
+      "ONE formal sentence of context — their rating/reputation if it's good, transitioning into the specific findings that follow. No greeting, no bullet points, no sign-off."
+    ),
+  findings: z
+    .array(z.string())
+    .min(2)
+    .max(4)
+    .describe(
+      "2-4 concise, complete bullet points (one sentence each) describing specific issues with their website — or, if they have no website, the opportunity one represents. Ground these in the real data given below when available, not generic guesses — don't omit a relevant detail just to keep it short. Bold the key number or metric in each bullet using markdown **double asterisks**, e.g. 'Your homepage takes **6.5 seconds** to load on mobile, well above the recommended under 3.4 seconds.' Formal register, no contractions, no spam-trigger language (exclamation points, ALL-CAPS, hard sales pitch)."
     ),
 });
 
@@ -39,7 +46,7 @@ Top issues: ${JSON.stringify((audit.issues ?? []).slice(0, 6))}
 ${audit.ai_summary ? `Summary: ${audit.ai_summary}` : ""}`
       : "";
 
-  return `Write the findings paragraph of a formal cold-outreach email to a local business offering website/software development and automation services.
+  return `Write the opening sentence and findings bullets of a formal cold-outreach email to a local business offering website/software development and automation services.
 
 Business: ${lead.name}
 Category: ${lead.category ?? "unknown"}
@@ -108,22 +115,26 @@ export async function POST(
     const message =
       error instanceof GenerateContentError
         ? "The AI couldn't produce a usable pitch — try again."
-        : "Something went wrong drafting that — try again.";
+        : error instanceof ServerOverloadedError
+          ? "Gemini is temporarily overloaded with requests — try again in a moment."
+          : "Something went wrong drafting that — try again.";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
   const senderName = profile?.name ?? "the sender";
-  const subject = lead.existing_website ? `A few notes on ${lead.name}'s website` : `A few notes for ${lead.name}`;
+  const subject = lead.existing_website ? `Website Performance Review — ${lead.name}` : `Regarding ${lead.name}'s Online Presence`;
   const greeting = `Hi ${lead.name} team,`;
   const intro = lead.existing_website
     ? `My name is ${senderName}, and I am a Software Engineer II with experience building and optimizing websites, software products, and AI-driven workflows. I am reaching out as I came across ${lead.name}'s website and reviewed it in some detail.`
     : `My name is ${senderName}, and I am a Software Engineer II with experience building and optimizing websites, software products, and AI-driven workflows. I am reaching out as I came across ${lead.name} online and noticed you do not currently have a website.`;
+  const findingsLines = pitch.findings.map((f) => `- ${f}`).join("\n");
   const closing =
     audit?.status === "completed"
       ? "I have attached a short report detailing these findings for your review. Beyond addressing these specific issues, I also help businesses automate various day-to-day operations through custom software and AI-driven workflows, which can meaningfully reduce the time and cost involved in running them."
       : "Beyond building a strong website, I also help businesses automate various day-to-day operations through custom software and AI-driven workflows, which can meaningfully reduce the time and cost involved in running them.";
-  const signoffLines = [profile?.name, profile?.mobile].filter(Boolean).join("\n");
-  const fullBody = `${greeting}\n\n${intro}\n\n${pitch.findings_prose.trim()}\n\n${closing}\n\nI would be glad to share further details at your convenience.\n\nBest regards,\n${signoffLines}`;
+  const followUp = "I would be glad to discuss this further in detail and share how I can help you address these items.";
+  const signoffLines = [profile?.name ? `**${profile.name}**` : null, profile?.mobile].filter(Boolean).join("\n");
+  const fullBody = `${greeting}\n\n${intro}\n\n${pitch.opening.trim()}\n\n${findingsLines}\n\n${closing}\n\n${followUp}\n\nBest regards,\n${signoffLines}`;
 
   const { data: outreach, error: insertError } = await supabase
     .from("lead_outreach")

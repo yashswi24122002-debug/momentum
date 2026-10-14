@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { checkIsAdmin } from "@/lib/supabase/admin-guard";
 import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key";
-import { generateContentAsUser, GenerateContentError } from "@/lib/ai/generate-content";
+import { generateContentAsUser, GenerateContentError, ServerOverloadedError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
 
 const ResumeContentSchema = z.object({
@@ -63,7 +63,9 @@ export async function POST(request: NextRequest) {
     const message =
       error instanceof GenerateContentError
         ? "Couldn't parse that into a resume — try pasting cleaner text, or fill the fields in by hand."
-        : "Something went wrong parsing that — try again.";
+        : error instanceof ServerOverloadedError
+          ? "Gemini is temporarily overloaded with requests — try again in a moment."
+          : "Something went wrong parsing that — try again.";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
