@@ -397,3 +397,20 @@ export function websiteAuditPdfBlob(params: { businessName: string; audit: Websi
 export function downloadWebsiteAuditPdf(params: { businessName: string; audit: WebsiteAudit; screenshotDataUrl?: string | null }) {
   renderWebsiteAuditPdf(params).save(`${slugify(params.businessName)}-website-audit.pdf`);
 }
+
+/** Opens the PDF in a new tab for viewing — no file gets saved to disk. */
+export function previewWebsiteAuditPdf(params: { businessName: string; audit: WebsiteAudit; screenshotDataUrl?: string | null }) {
+  renderWebsiteAuditPdf(params).output("dataurlnewwindow");
+}
+
+/** Fetches a (likely signed, short-lived) URL and converts it to a data URL — needed to embed the screenshot in a client-rendered PDF. */
+export async function toDataUrl(url: string): Promise<string> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}

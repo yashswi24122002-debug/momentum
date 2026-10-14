@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/supabase/route-guard";
 import { sendEmail } from "@/lib/email/mailer";
 import { signAttachment } from "@/lib/email/sign-attachment";
+import { plainTextToHtml } from "@/lib/email/plain-text-to-html";
 import { logError } from "@/lib/errors/log-error";
 
 export async function POST(
@@ -51,7 +52,7 @@ export async function POST(
   const result = await sendEmail({
     to: lead.email,
     subject: outreach.pitch_subject,
-    html: body.replace(/\n/g, "<br />"),
+    html: plainTextToHtml(body),
     text: body,
     attachments: reportAttachment ? [reportAttachment] : undefined,
   });

@@ -43,14 +43,28 @@ export async function sendEmail(params: {
     return { success: false, error: "SMTP_HOST/SMTP_USER/SMTP_PASS/EMAIL_FROM not configured" };
   }
 
+  // Reply-To and List-Unsubscribe are small but real deliverability
+  // signals — their absence is itself a mild spam indicator under Gmail/
+  // Yahoo's bulk-sender guidelines, which apply even at low volume. Not
+  // a substitute for proper domain authentication (SPF/DKIM/DMARC), which
+  // a bare @gmail.com address can't have — this only mitigates, not fixes,
+  // a personal Gmail SMTP account's elevated baseline spam risk for
+  // automated-looking outreach.
+  const fromAddressMatch = from.match(/<([^>]+)>/);
+  const fromAddress = fromAddressMatch ? fromAddressMatch[1] : from;
+
   try {
     await getTransporter().sendMail({
       from,
       to: params.to,
+      replyTo: fromAddress,
       subject: params.subject,
       html: params.html,
       text: params.text,
       attachments: params.attachments,
+      headers: {
+        "List-Unsubscribe": `<mailto:${fromAddress}?subject=unsubscribe>`,
+      },
     });
     return { success: true };
   } catch (error) {

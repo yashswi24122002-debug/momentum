@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { ArrowLeft, Send, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Save, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,8 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { fetcher } from "@/lib/swr-fetcher";
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_TONES } from "@/lib/leads/ui";
-import type { LeadOutreachWithLead } from "@/lib/types/leads";
+import { previewWebsiteAuditPdf, toDataUrl } from "@/lib/leads/website-audit-pdf";
+import type { LeadOutreachWithLead, WebsiteAudit } from "@/lib/types/leads";
 
 function OutreachCard({
   outreach,
@@ -30,6 +31,7 @@ function OutreachCard({
   const [bodyText, setBodyText] = useState(outreach.pitch_body_final ?? outreach.pitch_body_draft ?? "");
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const editable = outreach.status === "draft" || outreach.status === "approved";
   const dirty = subject !== (outreach.pitch_subject ?? "") || bodyText !== (outreach.pitch_body_final ?? outreach.pitch_body_draft ?? "");
 
@@ -48,6 +50,25 @@ function OutreachCard({
     const { outreach: updated } = await res.json();
     onSaved({ ...outreach, ...updated });
     toast.success("Saved.");
+  }
+
+  async function previewAttachment() {
+    setPreviewing(true);
+    try {
+      const res = await fetch(`/api/leads/${outreach.lead_id}/website-audit`);
+      if (!res.ok) throw new Error("fetch failed");
+      const { audit, screenshotUrl } = (await res.json()) as { audit: WebsiteAudit | null; screenshotUrl: string | null };
+      if (!audit || audit.status !== "completed") {
+        toast.error("No report has been generated for this lead yet — run Website Report from the lead list first.");
+        return;
+      }
+      const screenshotDataUrl = screenshotUrl ? await toDataUrl(screenshotUrl).catch(() => null) : null;
+      previewWebsiteAuditPdf({ businessName: outreach.business_leads?.name ?? "Lead", audit, screenshotDataUrl });
+    } catch {
+      toast.error("Couldn't load the attachment — try again.");
+    } finally {
+      setPreviewing(false);
+    }
   }
 
   async function send() {
@@ -84,19 +105,26 @@ function OutreachCard({
           <Textarea rows={6} value={bodyText} disabled={!editable} onChange={(e) => setBodyText(e.target.value)} />
         </div>
       </div>
-      {editable ? (
-        <div className="mt-2 flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={save} disabled={saving || !dirty}>
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-            Save
-          </Button>
-          <Button size="sm" onClick={send} disabled={sending}>
-            {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-            {sending ? "Sending…" : "Send"}
-          </Button>
-        </div>
-      ) : (
-        outreach.sent_at && <p className="mt-2 text-xs text-text-muted">Sent {new Date(outreach.sent_at).toLocaleString()}.</p>
+      <div className="mt-2 flex flex-wrap justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={previewAttachment} disabled={previewing}>
+          {previewing ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />}
+          Preview attachment
+        </Button>
+        {editable && (
+          <>
+            <Button size="sm" variant="outline" onClick={save} disabled={saving || !dirty}>
+              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+              Save
+            </Button>
+            <Button size="sm" onClick={send} disabled={sending}>
+              {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+              {sending ? "Sending…" : "Send"}
+            </Button>
+          </>
+        )}
+      </div>
+      {!editable && outreach.sent_at && (
+        <p className="mt-2 text-xs text-text-muted">Sent {new Date(outreach.sent_at).toLocaleString()}.</p>
       )}
     </Card>
   );

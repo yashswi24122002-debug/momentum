@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { fetcher } from "@/lib/swr-fetcher";
-import { downloadWebsiteAuditPdf, websiteAuditPdfBlob } from "@/lib/leads/website-audit-pdf";
+import { downloadWebsiteAuditPdf, websiteAuditPdfBlob, toDataUrl } from "@/lib/leads/website-audit-pdf";
 import { LIGHTHOUSE_BENCHMARKS, DEFAULT_LIGHTHOUSE_BENCHMARK } from "@/lib/integrations/lighthouse-benchmarks";
 import type { BusinessLead, WebsiteAudit, WebsiteAuditScores } from "@/lib/types/leads";
 
@@ -46,17 +46,6 @@ function scoreClass(score: number | null): string {
   if (score >= 90) return "text-primary";
   if (score >= 50) return "text-warning";
   return "text-danger";
-}
-
-async function toDataUrl(url: string): Promise<string> {
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 }
 
 export function WebsiteAuditDialog({

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email/mailer";
 import { signAttachment } from "@/lib/email/sign-attachment";
+import { plainTextToHtml } from "@/lib/email/plain-text-to-html";
 
 export type JobApplicationRow = {
   id: string;
@@ -39,7 +40,7 @@ export async function sendOutreachEmail(
   const result = await sendEmail({
     to: application.contact_email,
     subject: application.email_subject,
-    html: body.replace(/\n/g, "<br />"),
+    html: plainTextToHtml(body),
     text: body,
     attachments: attachments.length > 0 ? attachments : undefined,
   });
