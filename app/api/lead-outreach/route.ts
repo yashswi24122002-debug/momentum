@@ -9,7 +9,7 @@ export async function GET() {
   // app/api/leads/route.ts.
   const { data, error } = await supabase
     .from("lead_outreach")
-    .select("*, business_leads(name, category, area)")
+    .select("*, business_leads(name, category, area, email)")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(500);

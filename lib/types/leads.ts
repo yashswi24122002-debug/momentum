@@ -29,11 +29,12 @@ export type LeadOutreach = {
   status: LeadOutreachStatus;
   sent_at: string | null;
   notes: string | null;
+  additional_emails: string[];
   created_at: string;
 };
 
 export type LeadOutreachWithLead = LeadOutreach & {
-  business_leads: Pick<BusinessLead, "name" | "category" | "area"> | null;
+  business_leads: Pick<BusinessLead, "name" | "category" | "area" | "email"> | null;
 };
 
 export type WebsiteAuditStatus = "pending" | "completed" | "failed";

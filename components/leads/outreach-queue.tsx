@@ -29,18 +29,26 @@ function OutreachCard({
 }) {
   const [subject, setSubject] = useState(outreach.pitch_subject ?? "");
   const [bodyText, setBodyText] = useState(outreach.pitch_body_final ?? outreach.pitch_body_draft ?? "");
+  const [additionalEmails, setAdditionalEmails] = useState((outreach.additional_emails ?? []).join(", "));
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const editable = outreach.status === "draft" || outreach.status === "approved";
-  const dirty = subject !== (outreach.pitch_subject ?? "") || bodyText !== (outreach.pitch_body_final ?? outreach.pitch_body_draft ?? "");
+  const dirty =
+    subject !== (outreach.pitch_subject ?? "") ||
+    bodyText !== (outreach.pitch_body_final ?? outreach.pitch_body_draft ?? "") ||
+    additionalEmails !== (outreach.additional_emails ?? []).join(", ");
 
   async function save() {
     setSaving(true);
+    const parsedEmails = additionalEmails
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
     const res = await fetch(`/api/lead-outreach/${outreach.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pitch_subject: subject, pitch_body_final: bodyText }),
+      body: JSON.stringify({ pitch_subject: subject, pitch_body_final: bodyText, additional_emails: parsedEmails }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -96,6 +104,19 @@ function OutreachCard({
         <StatusBadge label={OUTREACH_STATUS_LABELS[outreach.status]} tone={OUTREACH_STATUS_TONES[outreach.status]} />
       </div>
       <div className="mt-2 space-y-2">
+        <div className="space-y-1">
+          <Label className="text-xs">To</Label>
+          <p className="truncate text-xs text-text-muted">{outreach.business_leads?.email ?? "No email on file"}</p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Additional recipients (optional)</Label>
+          <Input
+            value={additionalEmails}
+            disabled={!editable}
+            onChange={(e) => setAdditionalEmails(e.target.value)}
+            placeholder="comma-separated, e.g. owner@acme.com, info@acme.com"
+          />
+        </div>
         <div className="space-y-1">
           <Label className="text-xs">Subject</Label>
           <Input value={subject} disabled={!editable} onChange={(e) => setSubject(e.target.value)} />

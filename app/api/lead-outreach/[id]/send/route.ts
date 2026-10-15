@@ -49,8 +49,10 @@ export async function POST(
 
   const reportAttachment = await signAttachment(supabase, audit?.report_pdf_path ?? null, "website-audit.pdf");
 
+  const recipients = [lead.email, ...(outreach.additional_emails ?? [])].filter((e): e is string => Boolean(e?.trim()));
+
   const result = await sendEmail({
-    to: lead.email,
+    to: recipients,
     subject: outreach.pitch_subject,
     html: plainTextToHtml(body),
     text: stripMarkdownBold(body),

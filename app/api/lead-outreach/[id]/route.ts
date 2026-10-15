@@ -16,6 +16,9 @@ export async function PATCH(
   if (typeof body.pitch_body_final === "string") updates.pitch_body_final = body.pitch_body_final;
   if (typeof body.notes === "string" || body.notes === null) updates.notes = body.notes;
   if (typeof body.status === "string" && ["draft", "approved"].includes(body.status)) updates.status = body.status;
+  if (Array.isArray(body.additional_emails) && body.additional_emails.every((e: unknown) => typeof e === "string")) {
+    updates.additional_emails = body.additional_emails.map((e: string) => e.trim()).filter(Boolean);
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });

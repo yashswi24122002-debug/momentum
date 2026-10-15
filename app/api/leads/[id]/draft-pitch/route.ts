@@ -27,31 +27,36 @@ const PitchSchema = z.object({
     .min(2)
     .max(4)
     .describe(
-      "2-4 concise, complete bullet points (one sentence each) describing specific issues with their website — or, if they have no website, the opportunity one represents. Ground these in the real data given below when available, not generic guesses — don't omit a relevant detail just to keep it short. Bold the key number or metric in each bullet using markdown **double asterisks**, e.g. 'Your homepage takes **6.5 seconds** to load on mobile, well above the recommended under 3.4 seconds.' Formal register, no contractions, no spam-trigger language (exclamation points, ALL-CAPS, hard sales pitch)."
+      "2-4 concise, complete bullet points (one sentence each), grounded in the real data given below — don't omit a relevant detail just to keep it short, and never invent a specific number/statistic that isn't given to you. Bold a real number with markdown **double asterisks** wherever one is actually given below (a measured website metric, or their Google rating) — if no real number applies to a bullet, write it in plain prose instead rather than fabricating one. Formal register, no contractions, no spam-trigger language (exclamation points, ALL-CAPS, hard sales pitch)."
     ),
 });
 
 function buildPrompt(lead: BusinessLead, audit: WebsiteAudit | null): string {
-  const websiteNote = lead.existing_website
-    ? `They do have a website already (${lead.existing_website}) — focus on it looking outdated/weak or an opportunity to modernize, not "you have no website."`
-    : "They have no website at all — this is the core angle: a real, well-reviewed local business with no online presence to bring customers in.";
+  const ratingNote =
+    lead.google_rating !== null ? `Google rating: ${lead.google_rating} stars — a real number, safe to bold if used.` : "Google rating: none yet.";
 
-  // When a completed audit exists, ground the prose in its actual
-  // findings instead of guessing generically.
-  const auditNote =
-    audit?.status === "completed"
-      ? `\n\nA technical audit of their website found real, specific problems — use these instead of generic guesses:
+  // When a completed audit exists, ground the bullets in its actual
+  // findings instead of guessing generically. With no website at all,
+  // there's no technical data to cite — the bullets should instead make
+  // the business case for having one (findability, credibility, losing
+  // business to competitors who do), using only the real data given here
+  // (the rating, category, area), never a fabricated statistic.
+  const situationNote = lead.existing_website
+    ? audit?.status === "completed"
+      ? `They do have a website (${lead.existing_website}). A technical audit found these real, specific problems — use these, not generic guesses:
 Scores (0-100): ${JSON.stringify(audit.scores)}
 Top issues: ${JSON.stringify((audit.issues ?? []).slice(0, 6))}
 ${audit.ai_summary ? `Summary: ${audit.ai_summary}` : ""}`
-      : "";
+      : `They do have a website (${lead.existing_website}), but no technical audit data is available yet — focus the bullets on the business case for a stronger web presence in general terms (credibility, findability, showcasing their work), not fabricated technical specifics.`
+    : "They have no website at all. There is no technical data to cite — focus the bullets on the real business cost of this (prospective customers searching for their category/area can't find them online, no way to showcase services or be contacted directly, a competitor with a website likely wins that search instead). The only real number available is their Google rating, if present — use it to make the case that a good reputation deserves an equally strong online presence, rather than citing any invented statistic.";
 
   return `Write the opening sentence and findings bullets of a formal cold-outreach email to a local business offering website/software development and automation services.
 
 Business: ${lead.name}
 Category: ${lead.category ?? "unknown"}
-Google rating: ${lead.google_rating ?? "no rating yet"}
-${websiteNote}${auditNote}
+Area: ${lead.area ?? "unknown"}
+${ratingNote}
+${situationNote}
 
 Tone: formal, genuine, specific to this business, not a mass-template feel.`;
 }
