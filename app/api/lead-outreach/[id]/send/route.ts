@@ -35,19 +35,35 @@ export async function POST(
     return NextResponse.json({ error: "Missing subject/body" }, { status: 400 });
   }
 
-  // The report PDF is rendered client-side (jsPDF) and uploaded ahead of
-  // send, same as the Jobs tool's resume/cover-letter PDFs — attach it if
-  // one's been generated for this lead's latest audit.
-  const { data: audit } = await supabase
-    .from("website_audits")
-    .select("report_pdf_path")
-    .eq("lead_id", lead.id)
-    .eq("user_id", user.id)
-    .order("requested_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Both PDFs are rendered client-side (jsPDF) and uploaded ahead of send,
+  // same as the Jobs tool's resume/cover-letter PDFs — attach whichever
+  // one's been generated for this lead: an audit report if they have a
+  // website, a forward-looking proposal if they don't. A lead could in
+  // theory have rows in both tables (e.g. existing_website was added
+  // after a proposal was already drafted) — the audit always wins since
+  // it's the more specific, grounded document once one exists.
+  const [{ data: audit }, { data: proposal }] = await Promise.all([
+    supabase
+      .from("website_audits")
+      .select("report_pdf_path")
+      .eq("lead_id", lead.id)
+      .eq("user_id", user.id)
+      .order("requested_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("lead_website_proposals")
+      .select("pdf_path")
+      .eq("lead_id", lead.id)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  const reportAttachment = await signAttachment(supabase, audit?.report_pdf_path ?? null, "website-audit.pdf");
+  const reportAttachment = audit?.report_pdf_path
+    ? await signAttachment(supabase, audit.report_pdf_path, "website-audit.pdf")
+    : await signAttachment(supabase, proposal?.pdf_path ?? null, "website-proposal.pdf");
 
   const recipients = [lead.email, ...(outreach.additional_emails ?? [])].filter((e): e is string => Boolean(e?.trim()));
 

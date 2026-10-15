@@ -16,7 +16,8 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { fetcher } from "@/lib/swr-fetcher";
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_TONES } from "@/lib/leads/ui";
 import { previewWebsiteAuditPdf, toDataUrl } from "@/lib/leads/website-audit-pdf";
-import type { LeadOutreachWithLead, WebsiteAudit } from "@/lib/types/leads";
+import { previewWebsiteProposalPdf } from "@/lib/leads/website-proposal-pdf";
+import type { LeadOutreachWithLead, WebsiteAudit, LeadWebsiteProposal } from "@/lib/types/leads";
 
 function OutreachCard({
   outreach,
@@ -63,15 +64,29 @@ function OutreachCard({
   async function previewAttachment() {
     setPreviewing(true);
     try {
-      const res = await fetch(`/api/leads/${outreach.lead_id}/website-audit`);
-      if (!res.ok) throw new Error("fetch failed");
-      const { audit, screenshotUrl } = (await res.json()) as { audit: WebsiteAudit | null; screenshotUrl: string | null };
-      if (!audit || audit.status !== "completed") {
-        toast.error("No report has been generated for this lead yet — run Website Report from the lead list first.");
+      const auditRes = await fetch(`/api/leads/${outreach.lead_id}/website-audit`);
+      if (!auditRes.ok) throw new Error("fetch failed");
+      const { audit, screenshotUrl } = (await auditRes.json()) as { audit: WebsiteAudit | null; screenshotUrl: string | null };
+      if (audit?.status === "completed") {
+        const screenshotDataUrl = screenshotUrl ? await toDataUrl(screenshotUrl).catch(() => null) : null;
+        previewWebsiteAuditPdf({ businessName: outreach.business_leads?.name ?? "Lead", audit, screenshotDataUrl });
         return;
       }
-      const screenshotDataUrl = screenshotUrl ? await toDataUrl(screenshotUrl).catch(() => null) : null;
-      previewWebsiteAuditPdf({ businessName: outreach.business_leads?.name ?? "Lead", audit, screenshotDataUrl });
+
+      const proposalRes = await fetch(`/api/leads/${outreach.lead_id}/website-proposal`);
+      if (!proposalRes.ok) throw new Error("fetch failed");
+      const { proposal } = (await proposalRes.json()) as { proposal: LeadWebsiteProposal | null };
+      if (proposal) {
+        previewWebsiteProposalPdf({
+          businessName: outreach.business_leads?.name ?? "Lead",
+          category: outreach.business_leads?.category ?? null,
+          area: outreach.business_leads?.area ?? null,
+          proposal,
+        });
+        return;
+      }
+
+      toast.error("No report or proposal has been generated for this lead yet — run Website Report or Website Proposal from the lead list first.");
     } catch {
       toast.error("Couldn't load the attachment — try again.");
     } finally {

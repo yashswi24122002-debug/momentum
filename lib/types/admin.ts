@@ -28,7 +28,8 @@ export type FeatureKey =
   | "jobs_tailor_application"
   | "leads_draft_pitch"
   | "leads_discover"
-  | "leads_analyze_website";
+  | "leads_analyze_website"
+  | "leads_draft_proposal";
 
 export type UsageLimit = {
   id: string;

@@ -101,3 +101,17 @@ export type WebsiteAudit = {
   requested_at: string;
   completed_at: string | null;
 };
+
+// The forward-looking equivalent of WebsiteAudit for a lead with no
+// existing site at all — nothing to measure, so this is a short,
+// AI-drafted case for why one makes sense plus suggested pages, not a
+// technical report.
+export type LeadWebsiteProposal = {
+  id: string;
+  user_id: string;
+  lead_id: string;
+  why: string | null;
+  suggested_pages: string[] | null;
+  pdf_path: string | null;
+  created_at: string;
+};

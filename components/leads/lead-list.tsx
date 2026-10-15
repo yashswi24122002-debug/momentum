@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { WebsiteAuditDialog } from "@/components/leads/website-audit-dialog";
+import { WebsiteProposalDialog } from "@/components/leads/website-proposal-dialog";
 import { fetcher } from "@/lib/swr-fetcher";
 import { LEAD_AREA_ORDER, LEAD_AREA_LABELS, LEAD_STATUS_LABELS, LEAD_STATUS_TONES } from "@/lib/leads/ui";
 import type { BusinessLead, LeadArea } from "@/lib/types/leads";
@@ -30,6 +31,7 @@ export function LeadList() {
   const [deleteTarget, setDeleteTarget] = useState<BusinessLead | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [auditTarget, setAuditTarget] = useState<BusinessLead | null>(null);
+  const [proposalTarget, setProposalTarget] = useState<BusinessLead | null>(null);
 
   const { data, mutate } = useSWR<{ leads: BusinessLead[] }>(
     `/api/leads${noWebsiteOnly ? "?has_website=false" : ""}`,
@@ -225,10 +227,15 @@ export function LeadList() {
                   {drafting === lead.id ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
                   {drafting === lead.id ? "Drafting…" : "Draft Pitch"}
                 </Button>
-                {lead.existing_website && (
+                {lead.existing_website ? (
                   <Button size="sm" variant="outline" onClick={() => setAuditTarget(lead)}>
                     <Gauge className="size-3.5" />
                     Website Report
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => setProposalTarget(lead)}>
+                    <Gauge className="size-3.5" />
+                    Website Proposal
                   </Button>
                 )}
                 <Button
@@ -260,6 +267,14 @@ export function LeadList() {
           lead={auditTarget}
           open={auditTarget !== null}
           onOpenChange={(open) => !open && setAuditTarget(null)}
+        />
+      )}
+
+      {proposalTarget && (
+        <WebsiteProposalDialog
+          lead={proposalTarget}
+          open={proposalTarget !== null}
+          onOpenChange={(open) => !open && setProposalTarget(null)}
         />
       )}
     </div>

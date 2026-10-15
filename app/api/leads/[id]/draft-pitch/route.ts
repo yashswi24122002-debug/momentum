@@ -6,7 +6,7 @@ import { resolveGeminiApiKey, NoApiKeyError } from "@/lib/admin/resolve-api-key"
 import { checkAndIncrementUsage, UsageLimitExceededError } from "@/lib/admin/usage";
 import { generateContentAsUser, GenerateContentError, ServerOverloadedError } from "@/lib/ai/generate-content";
 import { logError } from "@/lib/errors/log-error";
-import type { BusinessLead, WebsiteAudit } from "@/lib/types/leads";
+import type { BusinessLead, WebsiteAudit, LeadWebsiteProposal } from "@/lib/types/leads";
 import type { ResumeContent } from "@/lib/types/resume";
 
 // Subject, greeting, personal intro, closing, and sign-off are all composed
@@ -31,7 +31,7 @@ const PitchSchema = z.object({
     ),
 });
 
-function buildPrompt(lead: BusinessLead, audit: WebsiteAudit | null): string {
+function buildPrompt(lead: BusinessLead, audit: WebsiteAudit | null, proposal: LeadWebsiteProposal | null): string {
   const ratingNote =
     lead.google_rating !== null ? `Google rating: ${lead.google_rating} stars — a real number, safe to bold if used.` : "Google rating: none yet.";
 
@@ -48,7 +48,13 @@ Scores (0-100): ${JSON.stringify(audit.scores)}
 Top issues: ${JSON.stringify((audit.issues ?? []).slice(0, 6))}
 ${audit.ai_summary ? `Summary: ${audit.ai_summary}` : ""}`
       : `They do have a website (${lead.existing_website}), but no technical audit data is available yet — focus the bullets on the business case for a stronger web presence in general terms (credibility, findability, showcasing their work), not fabricated technical specifics.`
-    : "They have no website at all. There is no technical data to cite — focus the bullets on the real business cost of this (prospective customers searching for their category/area can't find them online, no way to showcase services or be contacted directly, a competitor with a website likely wins that search instead). The only real number available is their Google rating, if present — use it to make the case that a good reputation deserves an equally strong online presence, rather than citing any invented statistic.";
+    : `They have no website at all. There is no technical data to cite — focus the bullets on the real business cost of this (prospective customers searching for their category/area can't find them online, no way to showcase services or be contacted directly, a competitor with a website likely wins that search instead). The only real number available is their Google rating, if present — use it to make the case that a good reputation deserves an equally strong online presence, rather than citing any invented statistic.${
+        proposal
+          ? `\n\nA proposal has already been drafted for them — use this, not generic guesses:
+Why: ${proposal.why}
+Suggested pages: ${JSON.stringify(proposal.suggested_pages)}`
+          : ""
+      }`;
 
   return `Write the opening sentence and findings bullets of a formal cold-outreach email to a local business offering website/software development and automation services.
 
@@ -112,9 +118,20 @@ export async function POST(
     .limit(1)
     .maybeSingle<WebsiteAudit>();
 
+  const { data: proposal } = lead.existing_website
+    ? { data: null }
+    : await supabase
+        .from("lead_website_proposals")
+        .select("*")
+        .eq("lead_id", id)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<LeadWebsiteProposal>();
+
   let pitch: z.infer<typeof PitchSchema>;
   try {
-    pitch = await generateContentAsUser(user.id, isAdmin, buildPrompt(lead as BusinessLead, audit), PitchSchema);
+    pitch = await generateContentAsUser(user.id, isAdmin, buildPrompt(lead as BusinessLead, audit, proposal), PitchSchema);
   } catch (error) {
     await logError(supabase, "leads/draft-pitch", error instanceof Error ? error.message : String(error), { leadId: id });
     const message =
@@ -133,10 +150,14 @@ export async function POST(
     ? `My name is ${senderName}, and I am a Software Engineer II with experience building and optimizing websites, software products, and AI-driven workflows. I am reaching out as I came across ${lead.name}'s website and reviewed it in some detail.`
     : `My name is ${senderName}, and I am a Software Engineer II with experience building and optimizing websites, software products, and AI-driven workflows. I am reaching out as I came across ${lead.name} online and noticed you do not currently have a website.`;
   const findingsLines = pitch.findings.map((f) => `- ${f}`).join("\n");
+  const automationPitch =
+    "I also help businesses automate various day-to-day operations through custom software and AI-driven workflows, which can meaningfully reduce the time and cost involved in running them.";
   const closing =
     audit?.status === "completed"
-      ? "I have attached a short report detailing these findings for your review. Beyond addressing these specific issues, I also help businesses automate various day-to-day operations through custom software and AI-driven workflows, which can meaningfully reduce the time and cost involved in running them."
-      : "Beyond building a strong website, I also help businesses automate various day-to-day operations through custom software and AI-driven workflows, which can meaningfully reduce the time and cost involved in running them.";
+      ? `I have attached a short report detailing these findings for your review. Beyond addressing these specific issues, ${automationPitch}`
+      : proposal
+        ? `I have attached a short proposal outlining what a website for your business could include. Beyond this, ${automationPitch}`
+        : `Beyond building a strong website, ${automationPitch}`;
   const followUp = "I would be glad to discuss this further in detail and share how I can help you address these items.";
   const signoffLines = [profile?.name ? `**${profile.name}**` : null, profile?.mobile].filter(Boolean).join("\n");
   const fullBody = `${greeting}\n\n${intro}\n\n${pitch.opening.trim()}\n\n${findingsLines}\n\n${closing}\n\n${followUp}\n\nBest regards,\n${signoffLines}`;

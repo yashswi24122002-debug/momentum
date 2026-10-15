@@ -22,6 +22,7 @@ export const FEATURE_ORDER: FeatureKey[] = [
   "leads_draft_pitch",
   "leads_discover",
   "leads_analyze_website",
+  "leads_draft_proposal",
 ];
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
   ideas_generate: "Generate ideas",
@@ -34,4 +35,5 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   leads_draft_pitch: "Draft lead pitch emails",
   leads_discover: "Discover local businesses (Google Places)",
   leads_analyze_website: "Analyze lead websites",
+  leads_draft_proposal: "Draft website proposals",
 };
