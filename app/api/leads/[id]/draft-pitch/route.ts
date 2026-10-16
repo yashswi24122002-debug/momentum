@@ -13,21 +13,24 @@ import type { ResumeContent } from "@/lib/types/resume";
 // in code — never left to the model — so the format is guaranteed every
 // time and the subject line in particular can never pick up spam-trigger
 // phrasing. The AI writes a one-sentence context opener plus the specific
-// findings as bullet points (not a labeled "Label: text" list, which reads
-// as AI-written and is itself a spam-filter heuristic for mass-marketing
-// templates — plain bullets with the key number bolded instead).
+// findings as bullet points. Tone is deliberately personal/individual, not
+// corporate — per direct feedback that an earlier formal, "report found
+// this" version read like it came from a company, not a freelancer:
+// first-person framing ("I found", "I noticed"), contractions allowed,
+// narrative connecting clauses instead of clinical report language, while
+// staying professional (no slang, no exclamation points).
 const PitchSchema = z.object({
   opening: z
     .string()
     .describe(
-      "ONE formal sentence of context — their rating/reputation if it's good, transitioning into the specific findings that follow. No greeting, no bullet points, no sign-off."
+      "ONE to two sentences, written as a genuine individual personally reaching out (not a company report) — acknowledge their rating/reputation if it's good (e.g. \"a 4.X-star rating speaks for itself\"), then transition naturally into having personally looked at their site, e.g. \"I did run a quick technical check on your website, though, and found a few things worth mentioning:\". Warm but professional, contractions are fine. No greeting, no bullet points, no sign-off."
     ),
   findings: z
     .array(z.string())
     .min(2)
     .max(4)
     .describe(
-      "2-4 concise, complete bullet points (one sentence each), grounded in the real data given below — don't omit a relevant detail just to keep it short, and never invent a specific number/statistic that isn't given to you. Bold a real number with markdown **double asterisks** wherever one is actually given below (a measured website metric, or their Google rating) — if no real number applies to a bullet, write it in plain prose instead rather than fabricating one. Formal register, no contractions, no spam-trigger language (exclamation points, ALL-CAPS, hard sales pitch)."
+      "2-4 bullet points, each a natural, flowing sentence as if YOU personally checked and noticed this — not clinical report language. For example: 'Your SEO is excellent, scoring a perfect 100, but mobile loading is somewhat slow — Speed Index is around **6.5 seconds**, higher than ideal for keeping visitors from leaving before the page loads.' Ground these in the real data given below — never invent a specific number/statistic that isn't given to you. Bold a real number with markdown **double asterisks** wherever one is actually given below (a measured website metric, or their Google rating) — if no real number applies to a bullet, write it in plain prose instead rather than fabricating one. Contractions are fine, professional register, no spam-trigger language (exclamation points, ALL-CAPS, hard sales pitch)."
     ),
 });
 
@@ -56,7 +59,7 @@ Suggested pages: ${JSON.stringify(proposal.suggested_pages)}`
           : ""
       }`;
 
-  return `Write the opening sentence and findings bullets of a formal cold-outreach email to a local business offering website/software development and automation services.
+  return `Write the opening sentence and findings bullets of a cold-outreach email from an individual freelance software engineer to a local business, offering website/software development and automation services.
 
 Business: ${lead.name}
 Category: ${lead.category ?? "unknown"}
@@ -64,7 +67,7 @@ Area: ${lead.area ?? "unknown"}
 ${ratingNote}
 ${situationNote}
 
-Tone: formal, genuine, specific to this business, not a mass-template feel.`;
+Tone: like a real person personally reaching out — warm, genuine, specific to this business, not a company report and not a mass-template feel.`;
 }
 
 export async function POST(
@@ -144,21 +147,21 @@ export async function POST(
   }
 
   const senderName = profile?.name ?? "the sender";
-  const subject = lead.existing_website ? `Website Performance Review — ${lead.name}` : `Regarding ${lead.name}'s Online Presence`;
+  const subject = lead.existing_website ? "A quick note about your website" : "A quick note about your online presence";
   const greeting = `Hi ${lead.name} team,`;
   const intro = lead.existing_website
-    ? `My name is ${senderName}, and I am a Software Engineer II with experience building and optimizing websites, software products, and AI-driven workflows. I am reaching out as I came across ${lead.name}'s website and reviewed it in some detail.`
-    : `My name is ${senderName}, and I am a Software Engineer II with experience building and optimizing websites, software products, and AI-driven workflows. I am reaching out as I came across ${lead.name} online and noticed you do not currently have a website.`;
+    ? `My name is ${senderName}, and I am a freelance Software Engineer with experience building and optimizing websites, software products, and AI-driven workflows. I came across ${lead.name}'s website recently and took a closer look.`
+    : `My name is ${senderName}, and I am a freelance Software Engineer with experience building and optimizing websites, software products, and AI-driven workflows. I came across ${lead.name} online recently and noticed you do not currently have a website.`;
   const findingsLines = pitch.findings.map((f) => `- ${f}`).join("\n");
   const automationPitch =
-    "I also help businesses automate various day-to-day operations through custom software and AI-driven workflows, which can meaningfully reduce the time and cost involved in running them.";
+    "I also help businesses automate day-to-day tasks through custom software and AI-driven workflows, which can meaningfully save time and cost — happy to share more if that's of interest.";
   const closing =
     audit?.status === "completed"
-      ? `I have attached a short report detailing these findings for your review. Beyond addressing these specific issues, ${automationPitch}`
+      ? `I've put together a short report covering all of this, attached here for your reference. Beyond the website itself, ${automationPitch}`
       : proposal
-        ? `I have attached a short proposal outlining what a website for your business could include. Beyond this, ${automationPitch}`
+        ? `I've put together a short proposal outlining what a website for your business could include, attached here for your reference. Beyond this, ${automationPitch}`
         : `Beyond building a strong website, ${automationPitch}`;
-  const followUp = "I would be glad to discuss this further in detail and share how I can help you address these items.";
+  const followUp = "I'd be glad to discuss this further whenever convenient for you.";
   const signoffLines = [profile?.name ? `**${profile.name}**` : null, profile?.mobile].filter(Boolean).join("\n");
   const fullBody = `${greeting}\n\n${intro}\n\n${pitch.opening.trim()}\n\n${findingsLines}\n\n${closing}\n\n${followUp}\n\nBest regards,\n${signoffLines}`;
 
