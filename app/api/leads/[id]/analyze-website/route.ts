@@ -26,7 +26,7 @@ const AnalysisSchema = z.object({
   summary: z
     .string()
     .describe(
-      "3-5 sentences, plain prose, written like a consultant's opening paragraph to the business owner — prioritized, specific to what's actually visible and measured (not generic website advice), explaining why it matters in business terms (losing customers, looking untrustworthy, not showing up in search). Reference the screenshot for visual/design observations alongside the technical findings."
+      "3-5 sentences, plain prose, written in first person as if you personally reviewed this site and are explaining it directly to the business owner (\"I found\", \"I noticed\" — not \"this analysis found\" or \"a review of the site shows\") — prioritized, specific to what's actually visible and measured (not generic website advice), explaining why it matters in business terms (losing customers, looking untrustworthy, not showing up in search). Reference the screenshot for visual/design observations alongside the technical findings."
     ),
   findings: z
     .array(

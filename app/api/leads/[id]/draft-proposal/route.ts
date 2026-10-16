@@ -15,7 +15,7 @@ const ProposalSchema = z.object({
   why: z
     .string()
     .describe(
-      "2-3 formal sentences making the business case for this specific business having a website — grounded in their category and Google rating if given, not generic website advice. No fabricated statistics."
+      "2-3 sentences, written in first person as if you personally are making this case to the business owner (\"I think\", \"I'd suggest\" — not \"this analysis recommends\" or \"it is recommended\") — grounded in their category and Google rating if given, not generic website advice. No fabricated statistics."
     ),
   suggested_pages: z
     .array(z.string())

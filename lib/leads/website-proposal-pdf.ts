@@ -158,7 +158,7 @@ export function renderWebsiteProposalPdf(params: {
   y += 4;
 
   paragraph(
-    "This is an indicative starting point — the final structure and features are tailored to your specific business once we discuss your requirements in more detail.",
+    "This is an indicative starting point — the final structure and features are tailored to your specific business once I understand your requirements in more detail.",
     8.5,
     TEXT_MUTED
   );

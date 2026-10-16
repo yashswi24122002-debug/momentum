@@ -350,7 +350,7 @@ export function renderWebsiteAuditPdf(params: {
   if (audit.findings && audit.findings.length > 0) {
     const blocks = audit.findings.map((finding) => ({ finding, ...measureComparisonBlock(finding.headline, finding.business_impact) }));
 
-    heading("What We Found", blocks[0].blockHeight + 3);
+    heading("What I Found", blocks[0].blockHeight + 3);
 
     for (const { finding, headlineLines, impactLines, tableRowH, blockHeight } of blocks) {
       ensureSpace(blockHeight + 4);

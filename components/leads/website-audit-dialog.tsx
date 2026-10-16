@@ -182,7 +182,7 @@ export function WebsiteAuditDialog({
 
             {audit.findings && audit.findings.length > 0 && (
               <div className="space-y-3">
-                <p className="text-xs font-medium text-text-muted">What We Found</p>
+                <p className="text-xs font-medium text-text-muted">What I Found</p>
                 {audit.findings.map((finding, i) => (
                   <ComparisonCard
                     key={i}
